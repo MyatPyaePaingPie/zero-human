@@ -20,3 +20,25 @@ Aria moved all judgement to GitHub issues (#1-#18, epic #18) and adopted the mat
 
 ## 12:45 cwd incident (second of the day)
 Wrote the DAG plan, handoff, and chronicle update while the shell cwd was still in blinkbuild/matra-suite (I had cd'd there to read the protocol). The plan commit reached matra-suite main; reverted with a normal revert commit (f77588d), stray files removed, and I briefly reset a cron commit on the Vaults session branch by misreading HEAD, restored with --soft to the same sha, remote back in place. Lesson recorded: every compound Bash command starts with an absolute cd into zero-human, no exceptions.
+
+## 13:00-14:00 PDT: Wave 1 shipped, pivoted twice, first PDF live
+
+What changed (all merged to main, deployed to the new persistent Render host reality-check-qhy9):
+probes.py (site-spec ports, SSRF guard) + agentready; sources.py one-box intake; lens rubric with
+batched evaluators; hackathon.py rubric eval (judging/sponsors/messaging/autonomy/technical);
+report.py (json, agent.md, HTML/PDF); /report routes; #17 persistence (Starter+disk, sentinel proved).
+
+What went wrong and got fixed the same hour: Opus blind verify caught an IPv4-mapped IPv6 SSRF bypass
+plus a claims-clobbering race in the probes thread (do-not-ship, then fix-then-ship, then held);
+agentready parser assumed a `failing` list the real API does not have (every agent-ready claim
+auto-passed live); async /judge handler blocked the event loop and Render restarted the instance
+mid-job; batched model calls answered only the first claim(s) for some personas (86% of votes lost);
+one lane used `git stash` on the shared tree (harmless, recorded). GROQ_API_KEY in the keychain is a
+placeholder: every model call runs on the OpenAI fallback.
+
+Model routing observed: Sonnet medium built three bounded modules cleanly; Opus medium as blind
+verifier on the SSRF surface earned its cost (3 real blockers). Opus medium as builder on the rubric
+did fine but so did Sonnet on the report; no evidence Opus was needed there.
+
+Open: Terac held to 17:00 by Aria's own answer; text intake (#23) lane running; dogfood says our
+own README/page fail every judging item (honest).
