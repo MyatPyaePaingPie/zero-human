@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS human_answers (
   respondent TEXT, claim_idx INTEGER NOT NULL DEFAULT 0, answer_yes INTEGER, free_text TEXT, created_at TEXT NOT NULL,
   UNIQUE(job_id, source, respondent, claim_idx)
 );
+CREATE TABLE IF NOT EXISTS human_briefs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, respondent TEXT NOT NULL,
+  source TEXT NOT NULL, terac_submission_id TEXT, answers TEXT NOT NULL, created_at TEXT NOT NULL,
+  UNIQUE(job_id, respondent)
+);
 CREATE TABLE IF NOT EXISTS ledger (
   id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, kind TEXT NOT NULL,
   amount_usd REAL NOT NULL, note TEXT, created_at TEXT NOT NULL
@@ -103,6 +108,25 @@ def add_human_answer(job_id: str, source: str, respondent: str, answer_yes: bool
             return True
         except sqlite3.IntegrityError:
             return False
+
+
+def add_human_brief(job_id: str, respondent: str, source: str, terac_submission_id: str | None, answers: dict) -> bool:
+    """One v2 human brief (docs/specs/human-brief.md section 4) per respondent per job.
+    False = this respondent already submitted (the duplicate guard for the v2 page)."""
+    with _lock, conn() as c:
+        try:
+            c.execute("INSERT INTO human_briefs(job_id,respondent,source,terac_submission_id,answers,created_at) VALUES(?,?,?,?,?,?)",
+                      (job_id, respondent, source, terac_submission_id, json.dumps(answers), now()))
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+
+def human_briefs(job_id: str) -> list[dict]:
+    with conn() as c:
+        rows = c.execute("SELECT respondent,source,terac_submission_id,answers,created_at FROM human_briefs WHERE job_id=? ORDER BY id", (job_id,)).fetchall()
+    return [{"respondent": r["respondent"], "source": r["source"], "terac_submission_id": r["terac_submission_id"],
+             "answers": json.loads(r["answers"]), "created_at": r["created_at"]} for r in rows]
 
 
 def claim_payment(session_id: str) -> bool:

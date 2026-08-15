@@ -219,7 +219,43 @@ def _humans_block(job: dict) -> dict[str, Any]:
     respondents = sorted({a["respondent"] for a in answers if a.get("respondent")})
     n = len(respondents)
     pending = job["status"] == "awaiting_humans" or n == 0
-    return {"n": n, "pending": pending, "source": (job["state"].get("panel") or {}).get("source")}
+    out = {"n": n, "pending": pending, "source": (job["state"].get("panel") or {}).get("source")}
+    brief = _brief_block(job)
+    if brief:
+        out["brief"] = brief
+    return out
+
+
+def _brief_block(job: dict) -> dict[str, Any] | None:
+    """Counts + quotes from the v2 human brief (docs/specs/human-brief.md section 5)."""
+    rows = store.human_briefs(job["job_id"])
+    if not rows:
+        return None
+    briefs = [b["answers"] for b in rows]
+    st = job["state"]
+    ai = {k: sum(1 for a in briefs if a.get("q5_ai_effect") == k) for k in ("more", "less", "same")}
+    real = {k: sum(1 for a in briefs if a.get("q6_real") == k) for k in ("real", "weekend")}
+    quotes = []
+    q1 = next((a["q1_what"] for a in briefs if (a.get("q1_what") or "").strip()), "")
+    q4 = next((a["q4_stopper"] for a in briefs if (a.get("q4_stopper") or "").strip()), "")
+    if q1:
+        quotes.append({"q": "q1_what", "text": q1[:300]})
+    if q4:
+        quotes.append({"q": "q4_stopper", "text": q4[:300]})
+    return {
+        "n": len(briefs),
+        "could_say_what_it_does": sum(1 for a in briefs if (a.get("q1_what") or "").strip()),
+        "would_pay": sum(1 for a in briefs if a.get("q2_pay")),
+        "price_guesses": [a["q2_price_guess"] for a in briefs if (a.get("q2_price_guess") or "").strip()],
+        "knows_someone": sum(1 for a in briefs if (a.get("q3_who") or "").strip()
+                             and " ".join(a["q3_who"].split()).lower().rstrip(".!") not in ("no one", "noone", "nobody", "none", "no-one")),
+        "ai_effect": ai,
+        "real_vs_weekend": real,
+        "quotes": quotes,
+        "settled_at": (rows[-1]["created_at"] if job["status"] == "settled" else None),
+        "timed_out": bool(st.get("timed_out")),
+        "panel_version": st.get("panel_version", "v1"),
+    }
 
 
 # --- build ---------------------------------------------------------------------------------------

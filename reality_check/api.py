@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from reality_check import before_after, intake, judge, linq_client, report, skus, store, stripe_poll, stripe_webhook, sweep, terac_client
+from reality_check import before_after, intake, judge, linq_client, rate_v2, report, skus, store, stripe_poll, stripe_webhook, sweep, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
 from reality_check.policy import envelope, learning, protocol
 
@@ -140,6 +140,9 @@ def rate_page(job_id: str, request: Request, response: Response, src: str = "loc
         response.set_cookie(RATER_COOKIE, respondent, max_age=86400, samesite="lax")
     if teracSubmissionId:
         src = "terac"
+    if rate_v2.applies(job):
+        # full_reality_check jobs get the v2 human brief (docs/specs/human-brief.md), not the claim list
+        return rate_v2.render(job_id, job, src=src, respondent=respondent, terac_id=teracSubmissionId)
     hq = html.escape(job["state"].get("human_question") or "")
     body = html.escape(job["request"]["input"][:4000])
     claims = job["request"]["claims"]
@@ -181,6 +184,8 @@ async def rate_submit(job_id: str, request: Request):
     if prev and any(a["respondent"] == respondent for a in store.human_answers(prev)):
         store.event(job_id, "human.rejected", {"reason": "judged the previous version", "before_job_id": prev})
         return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:18px system-ui;margin:3rem'>You already judged the previous version; this round needs fresh eyes. Thank you.</p>")
+    if job and rate_v2.applies(job):
+        return rate_v2.submit(job_id, job, form, src=src, respondent=respondent)
     free_text = str(form.get("free_text", ""))
     n = int(form.get("n_claims", 1))
     accepted = 0

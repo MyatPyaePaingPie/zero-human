@@ -177,7 +177,33 @@ def _resolve_sources(req: JudgeRequest) -> dict | None:
         req.url = norm["live_url"]
     return {"source_kinds": norm.get("source_kinds", []), "primary_kind": norm.get("primary_kind"),
             "live_url": norm.get("live_url"), "warnings": norm.get("warnings", []),
-            "sources": [{k: v for k, v in s.items() if k != "text"} | {"chars": len(s.get("text") or "")} for s in norm.get("sources", [])]}
+            "sources": [{k: v for k, v in s.items() if k != "text"} | {"chars": len(s.get("text") or ""),
+                        "first_screen": _first_screen(s), "link": s.get("live_url") or s.get("ref") or ""}
+                        for s in norm.get("sources", [])]}
+
+
+def _first_screen(s: dict) -> str:
+    """What a stranger sees first, per source kind (docs/specs/human-brief.md section 2). The full
+    text stays out of state; this is the stimulus the /rate v2 page shows."""
+    text = (s.get("text") or "").strip()
+    kind = s.get("kind")
+    if not text:
+        return ""
+    if kind == "page":
+        title = (s.get("meta") or {}).get("title") or ""
+        head = text[:400].strip()
+        return (title + "\n" + head).strip() if title else head
+    if kind == "deck":
+        first = text.split("--- slide 2 ---", 1)[0]
+        return first.replace("--- slide 1 ---", "").strip()[:600]
+    if kind == "repo":
+        readme = text.split("--- README ---", 1)[1].strip() if "--- README ---" in text else text
+        lines = [ln.strip() for ln in readme.splitlines()]
+        title = next((ln.lstrip("# ").strip() for ln in lines if ln), "")
+        body = readme.split("\n", 1)[1] if "\n" in readme else ""
+        para = next((p.strip() for p in body.split("\n\n") if p.strip() and not p.strip().startswith("#")), "")
+        return (title + "\n" + para[:400]).strip()
+    return text[:400]
 
 
 def _launch_hackathon(job_id: str, text: str, has_repo: bool) -> None:
