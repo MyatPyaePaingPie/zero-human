@@ -68,6 +68,7 @@ class ClaimVerdict(BaseModel):
     p_humans: float | None = None
     n_humans: int = 0
     minority_view: str = ""
+    objective: dict | None = Field(default=None, description="Replay QA journey evidence for flow claims: {result, bugs, journey_id}.")
 
 
 class VoiDecision(BaseModel):

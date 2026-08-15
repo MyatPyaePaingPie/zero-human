@@ -25,10 +25,30 @@ def submit(req: IntakeRequest) -> Verdict:
                       human_question="Based on what you can see at the URL, does this claim hold? Yes or no, and what convinced you.")
     v = judge.start(jr, paid_usd=req.paid_usd)
     # objective evidence: Replay QA crawls the live URL while humans judge the claims
-    handle = replay_client.launch(v.job_id, req.live_url, f"reality-check {req.team}")
+    handle = replay_client.launch(v.job_id, req.live_url, f"reality-check {req.team}", design_document=text, claims=req.claims)
     if handle:
         job = store.get_job(v.job_id)
         job["state"]["replay"] = handle
         store.put_job(v.job_id, job["buyer_id"], job["status"], job["request"], job["state"])
         v = judge.verdict(v.job_id)
     return v
+
+
+class RedeployRequest(BaseModel):
+    git_sha: str = Field(min_length=4, max_length=64)
+    branch: str = Field(default="main", max_length=120)
+    deployed_url: str | None = Field(default=None, max_length=500)
+    change: str = Field(default="", max_length=2000)
+
+
+def redeploy(job_id: str, req: RedeployRequest) -> dict:
+    """Team shipped a fix: Replay re-tests the new version; verdict() then shows bugs before -> after."""
+    job = store.get_job(job_id)
+    if not job:
+        raise KeyError(job_id)
+    handle = job["state"].get("replay")
+    if not handle:
+        return {"job_id": job_id, "replay": None, "reason": "no Replay project on this job"}
+    snap = replay_client.record_version(job_id, handle, git_sha=req.git_sha, branch=req.branch, deployed_url=req.deployed_url, change=req.change)
+    store.put_job(job_id, job["buyer_id"], job["status"], job["request"], job["state"])
+    return {"job_id": job_id, "version": snap}

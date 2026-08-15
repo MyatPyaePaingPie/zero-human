@@ -1,7 +1,8 @@
 """FastAPI surface.
 
 POST /judge                 buyer (agent or paid human) submits a judgment request
-POST /intake                verified_autonomous intake (claims + invariants, builder-blind)
+POST /intake                verified_autonomous intake (claims + invariants, builder-blind); Replay QA project + per-flow-claim journeys
+POST /intake/{id}/redeploy  team shipped a fix: Replay re-tests, verdict shows open bugs before -> after
 POST /order, GET /order/{id} pay-first flow (stripe_webhook.py): pending job -> Payment Link -> poller/webhook starts it
 GET  /judge/{job_id}        verdict so far
 GET  /rate/{job_id}         human rating page (Terac activity task_url / Linq link / room QR)
@@ -71,6 +72,14 @@ async def post_intake(request: Request) -> Verdict:
         raise HTTPException(422, str(exc))
     req.paid_usd = adm.paid_usd
     return intake.submit(req)
+
+
+@app.post("/intake/{job_id}/redeploy")
+def post_redeploy(job_id: str, req: intake.RedeployRequest) -> dict:
+    try:
+        return intake.redeploy(job_id, req)
+    except KeyError:
+        raise HTTPException(404, "no such job")
 
 
 @app.post("/before_after/lock/{job_id}")
