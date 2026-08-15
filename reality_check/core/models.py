@@ -29,7 +29,9 @@ class JudgeRequest(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    input: str = Field(min_length=1, max_length=20000, description="Text, URL, or A/B payload.")
+    input: str = Field(default="", max_length=20000, description="Text, URL, or A/B payload. May be empty when repo/deck/url are given.")
+    repo: str | None = Field(default=None, max_length=300, description="GitHub repo URL: README + manifests are read via the API (no clone) and merged into the input.")
+    deck: str | None = Field(default=None, max_length=500, description="Deck: PDF URL or public Google Slides link (exported as PDF); slide text is merged into the input.")
     claim: str | None = Field(default=None, max_length=500, description="Single binary claim (shorthand for claims=[claim]).")
     claims: list[str] = Field(default_factory=list, max_length=12, description="Rubric: several binary claims judged together.")
     human_question: str | None = Field(default=None, max_length=300, description="Free-text question shown to humans; defaults to the claim(s).")
@@ -51,6 +53,8 @@ class JudgeRequest(BaseModel):
 
     @model_validator(mode="after")
     def _normalise_claims(self) -> "JudgeRequest":
+        if not (self.input.strip() or self.repo or self.deck or self.url):
+            raise ValueError("give at least one of input, repo, deck, url")
         if self.claim and not self.claims:
             self.claims = [self.claim]
         if not self.claims:

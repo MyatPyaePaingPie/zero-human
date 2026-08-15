@@ -237,3 +237,30 @@ def test_one_box_pitch_text():
     assert result["primary_kind"] == "pitch"
     assert result["source_kinds"] == ["pitch"]
     assert "We are building" in result["text"]
+
+
+def test_judge_accepts_repo_and_deck_and_merges_sources(monkeypatch):
+    """#20 wiring: POST /judge with repo+deck (no input) normalizes, stores source_kinds, sets url."""
+    from fastapi.testclient import TestClient
+    from reality_check import judge as judge_module
+    from reality_check import sources as sources_module
+    from reality_check.api import app
+
+    def fake_normalize(**kw):
+        return {"text": "=== REPO x ===\nREADME says: rockets for hobbyists\n=== DECK y ===\n--- slide 1 ---\nAcme", "live_url": "https://acme.example",
+                "source_kinds": ["repo", "deck"], "primary_kind": "repo", "warnings": [],
+                "sources": [{"kind": "repo", "ref": kw.get("repo"), "text": "README...", "live_url": None, "meta": {}},
+                            {"kind": "deck", "ref": kw.get("deck"), "text": "slides", "live_url": "https://acme.example", "meta": {"slides": 1}}]}
+    monkeypatch.setattr(sources_module, "normalize", fake_normalize)
+    monkeypatch.setattr(judge_module, "_launch_probes", lambda job_id, url: None)
+    c = TestClient(app)
+    r = c.post("/judge", json={"repo": "https://github.com/acme/rockets", "deck": "https://docs.google.com/presentation/d/abc/edit",
+                               "sku": "reality_check", "evidence_standard": "voi_routed", "max_budget_usd": 0})
+    assert r.status_code == 200, r.text
+    from reality_check import store
+    job = store.get_job(r.json()["job_id"])
+    assert job["state"]["sources"]["source_kinds"] == ["repo", "deck"]
+    assert job["request"]["url"] == "https://acme.example"
+    assert "README says" in job["request"]["input"]
+    r2 = c.post("/judge", json={"sku": "reality_check"})
+    assert r2.status_code == 422

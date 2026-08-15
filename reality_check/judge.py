@@ -158,10 +158,31 @@ def _probe_check_ids(claim_text: str) -> tuple[str, ...] | None:
     return None
 
 
+def _resolve_sources(req: JudgeRequest) -> dict | None:
+    """One box, three inputs (#20): repo README+manifests, landing page copy, deck slides are read
+    (SSRF-guarded, budgeted) and merged into req.input with source markers; the page URL, else the
+    README's live link, else a slide link becomes req.url so probes have a target."""
+    if not (req.repo or req.deck or (req.url and not req.input.strip())):
+        return None
+    from reality_check import sources
+    norm = sources.normalize(repo=req.repo, page=req.url, deck=req.deck, pitch=req.input.strip() or None)
+    if norm.get("text"):
+        req.input = norm["text"][:20000]
+    if not req.url and norm.get("live_url"):
+        req.url = norm["live_url"]
+    return {"source_kinds": norm.get("source_kinds", []), "primary_kind": norm.get("primary_kind"),
+            "live_url": norm.get("live_url"), "warnings": norm.get("warnings", []),
+            "sources": [{k: v for k, v in s.items() if k != "text"} | {"chars": len(s.get("text") or "")} for s in norm.get("sources", [])]}
+
+
 def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None) -> Verdict:
     job_id = job_id or uuid.uuid4().hex[:12]
+    src = _resolve_sources(req)
+    if not req.input.strip():
+        req.input = "(no readable text was found in the supplied sources)"
     store.put_job(job_id, req.buyer_id, "evaluating", req.model_dump(), {})
-    store.event(job_id, "job.created", {"sku": req.sku, "claims": req.claims, "buyer": req.buyer_id})
+    store.event(job_id, "job.created", {"sku": req.sku, "claims": req.claims, "buyer": req.buyer_id,
+                                        **({"sources": src} if src else {})})
     if paid_usd > 0:
         store.ledger_add_once(job_id, "revenue", paid_usd, f"{req.sku} sold")
 
@@ -207,7 +228,8 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     store.event(job_id, "voi.decided", decision.model_dump())
 
     state = {"claims": claims, "voi": decision.model_dump(), "panel": None,
-             "human_question": req.human_question or skus.default_human_question(req.sku)}
+             "human_question": req.human_question or skus.default_human_question(req.sku),
+             **({"sources": src} if src else {})}
     if decision.buy and decision.arm:
         panel = panels.REGISTRY["local"] if use_free_panel else panels.for_arm(decision.arm)
         approve = lambda quoted, arm=decision.arm: envelope.gate_panel_launch(job_id, arm, quoted, paid_usd)  # noqa: E731
