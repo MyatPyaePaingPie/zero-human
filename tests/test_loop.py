@@ -47,12 +47,12 @@ def test_demand_check_rubric_multi_claim():
                                "force_humans": True, "cost_if_wrong_usd": 100}, headers={"X-RC-Paid": "10"})
     assert r.status_code == 200, r.text
     v = r.json(); jid = v["job_id"]
-    assert len(v["claims"]) == 5 and v["status"] == "awaiting_humans"
+    assert len(v["claims"]) == 6 and v["status"] == "awaiting_humans"
     for i in range(3):
-        data = {"n_claims": "5", "src": "local", "respondent": f"d{i}", "free_text": "my cofounder would pay"}
-        data.update({f"c{k}": ("yes" if k != 4 else "no") for k in range(5)})
+        data = {"n_claims": "6", "src": "local", "respondent": f"d{i}", "free_text": "my cofounder would pay"}
+        data.update({f"c{k}": ("yes" if k != 5 else "no") for k in range(6)})
         assert c.post(f"/rate/{jid}", data=data).status_code == 200
     v = c.get(f"/judge/{jid}").json()
     assert v["status"] == "settled" and v["n_humans"] == 3
-    assert [x["verdict"] for x in v["claims"]] == ["yes", "yes", "yes", "yes", "no"] and v["verdict"] == "no"
+    assert [x["verdict"] for x in v["claims"]] == ["yes"] * 5 + ["no"] and v["verdict"] == "no"
     assert c.get(f"/rate/{jid}").status_code == 200
