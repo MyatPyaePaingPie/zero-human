@@ -42,3 +42,23 @@ did fine but so did Sonnet on the report; no evidence Opus was needed there.
 
 Open: Terac held to 17:00 by Aria's own answer; text intake (#23) lane running; dogfood says our
 own README/page fail every judging item (honest).
+
+## 14:00-15:15 PDT (local clock; ~17:00-18:15 event time): the product became a text thread
+
+Shipped and live (9440cc7): text intake as a conversation (gathering -> DONE -> pay link -> paid ->
+graded -> humans -> report), Stripe pay-before-results with promo codes, one open job per phone,
+sponsor depth from signatures, judging design (verdict+quote, OpenAI primary), report template v2
+via WeasyPrint on Render, v2 /rate human brief with inline screenshot + Slides embed + README,
+operator endpoints (/admin/humans, /admin/sources, thread merge), RC_TERAC_AUTO switch.
+
+Aria's rule that changed the flow: no report to a paying person without human answers; status texts
+until then. Aria's flip: "flip Terac on" (relayed) after her earlier direct "hold until 5pm"; I asked
+her once more before spending and she rejected the question (she does not want to be asked twice
+about the same decision once she has moved on). Lesson recorded.
+
+Defects caught live today by dogfooding: put_job never rewrote request (silent), Verdict.status
+lacked "cancelled", claims cap 12 vs 44-claim rubric (paid full check could not restart), stale
+rater enrollment on every inbound, repo link = README live link.
+
+Codex (Sol medium) built the intake conversation in 58s with 13 tests, no rework; Aria's call to
+"use codex not opus" for bounded builds held up.
