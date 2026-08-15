@@ -42,14 +42,14 @@ pre{background:var(--code);padding:20px 22px;overflow-x:auto;font:13px/1.55 ui-m
 <div class="intro">
 <div class="eyebrow">Reality Check, Zero Human Company Hackathon, template</div>
 <h1>Reality Check Report Template</h1>
-<p>What a team receives: a three-page PDF and one <code>agent.md</code>, both rendered from the same <code>report.json</code>. Placeholder values are in angle brackets. Rubric source: the organizers' guidebook (<code>docs/research/guidebook.md</code>), derived rubric <code>docs/hackathon-rubric.md</code>. Page 1 leads with the submission checklist and sponsor tracks because that is where eligibility and prize money live; Terac and Stripe are itemized because they are the two required rules. The Terac humans block reads "pending" until the study lands.</p>
+<p>What a team receives: a four-page PDF and one <code>agent.md</code>, both rendered from the same <code>report.json</code>. Placeholder values are in angle brackets. Rubric source: the organizers' guidebook (<code>docs/research/guidebook.md</code>), derived rubric <code>docs/hackathon-rubric.md</code>. Page 1 leads with the submission checklist and sponsor tracks because that is where eligibility and prize money live; Terac and Stripe are itemized because they are the two required rules. The Terac humans block reads "pending" until the study lands.</p>
 </div>
 
-<section class="page" data-page="PDF page 1 of 3">
+<section class="page" data-page="PDF page 1 of 4">
 <div class="eyebrow">Reality Check, 2026-08-15, job <span class="id">&lt;job_id&gt;</span></div>
 <h1>&lt;Project name&gt;</h1>
 <p>"&lt;one-line pitch, the team's own words&gt;"</p>
-<div class="stamps"><span class="stamp warn">Hackathon: fixable by 18:30</span><span class="stamp bad">Business: not yet</span></div>
+<div class="stamps"><span class="stamp warn">Hackathon: fixable by 18:30</span><span class="stamp bad">Autonomous: 2 of 7 hold</span><span class="stamp bad">Business: not yet</span></div>
 <div class="grid2">
 <div class="card"><div class="k">Do these three before you submit</div><ol><li>&lt;highest-leverage fix, names the slide/screen/file&gt;</li><li>&lt;second&gt;</li><li>&lt;third&gt;</li></ol></div>
 <div class="card"><div class="k">3 strangers from Terac's network read it</div><div>Blind, general population, answered in &lt;12&gt; min.<br>Could say what it does: <b>2 of 3</b>. Would pay: <b>1 of 3</b>.<br>"I thought it was for developers." · "Where is the price?"<br><span class="note">Read: README + 2 manifests · 12 slides · landing page.</span></div></div>
@@ -75,7 +75,7 @@ pre{background:var(--code);padding:20px 22px;overflow-x:auto;font:13px/1.55 ui-m
 <div class="foot">Stamp rules: hackathon = contender when both required rules pass and no weight-3 judging item fails; fixable when fails are agent-owned; not yet otherwise. Business = ready_to_charge / one_gap_away / not_yet by the four gaps. &lt;N&gt; hackathon projects reviewed today; this one ranks &lt;k&gt;.</div>
 </section>
 
-<section class="page" data-page="PDF page 2 of 3">
+<section class="page" data-page="PDF page 2 of 4">
 <h2>How to win this hackathon</h2>
 <div class="tw"><table><tr><th>Judging item</th><th>Weight</th><th>Result</th><th>Why</th><th>Fix</th></tr>
 <tr><td><span class="id">judge/terac-human-loop</span></td><td>3</td><td><span class="pill p-warn">partial</span></td><td>humans recruited; no before/after number</td><td>slide 6: "3 raters changed the headline; clarity 40% to 100%"</td></tr>
@@ -93,7 +93,21 @@ pre{background:var(--code);padding:20px 22px;overflow-x:auto;font:13px/1.55 ui-m
 </ul>
 </section>
 
-<section class="page" data-page="PDF page 3 of 3">
+<section class="page" data-page="PDF page 3 of 4">
+<h2>Can this run autonomously? Seven ways agent-run companies fail</h2>
+<p class="note">Graded against failure modes from two systems we built that tried to run on their own (augur, money swarm). This is the part nobody else in the room can tell you.</p>
+<div class="tw"><table><tr><th>Failure</th><th>Result</th><th>What we saw</th><th>Fix</th></tr>
+<tr><td><span class="id">auto/spend-authority</span><br><span class="note">who holds the money</span></td><td><span class="pill p-bad">fail</span></td><td>budget lives in the system prompt; agent can call Stripe with any amount</td><td>move the limit to config, add a freeze switch, fail closed when balance is unknown</td></tr>
+<tr><td><span class="id">auto/idempotent-money</span><br><span class="note">fires exactly once</span></td><td><span class="pill p-warn">not evidenced</span></td><td>webhook handler has no idempotency key in repo</td><td>key fulfillment by session id; dedupe revenue by event id</td></tr>
+<tr><td><span class="id">auto/decision-quality</span><br><span class="note">measured vs doing nothing</span></td><td><span class="pill p-warn">partial</span></td><td>before/after shown, but humans saw the agent's answer first</td><td>collect blind, then reveal; compare to a no-agent baseline</td></tr>
+<tr><td><span class="id">auto/liveness</span><br><span class="note">someone notices it stopped</span></td><td><span class="pill p-bad">fail</span></td><td>no health check, no one paged</td><td>add /health + a canary order every hour; say who gets the text</td></tr>
+<tr><td><span class="id">auto/authority-boundary</span><br><span class="note">customer text is not authority</span></td><td><span class="pill p-warn">not evidenced</span></td><td>chat input goes straight to the agent that can issue refunds</td><td>quarantine inbound text; refunds need a rule, not a message</td></tr>
+<tr><td><span class="id">auto/human-loop-design</span><br><span class="note">human where agents cannot decide</span></td><td><span class="pill p-good">pass</span></td><td>humans judge taste; priced and timed</td><td>none</td></tr>
+<tr><td><span class="id">auto/ledger</span><br><span class="note">append-only truth</span></td><td><span class="pill p-warn">partial</span></td><td>orders table is overwritten; revenue number not traceable</td><td>append events; derive counts</td></tr>
+</table></div>
+</section>
+
+<section class="page" data-page="PDF page 4 of 4">
 <h2>Is it a business</h2>
 <div class="grid2">
 <div class="card"><div class="k">payer <span class="pill p-bad">red</span></div><div>Agents: no named payer, price implied. Humans: 1 of 3 would pay; "I thought it was for developers" (customer). Fix: name the buyer on the first screen.</div></div>
@@ -143,6 +157,10 @@ Done when: judge/viability claim 1 reaches p &gt;= 0.7.
 Evidence: headline "&lt;current&gt;" names neither buyer nor price.
 Fix: rewrite to "&lt;what&gt; for &lt;whom&gt;, $&lt;price&gt;".
 Done when: msg/first-screen claims pass.
+
+## Can it run autonomously (7 failure modes)
+auto/spend-authority: fail · auto/liveness: fail · auto/idempotent-money, auto/authority-boundary: not evidenced · auto/decision-quality, auto/ledger: partial · auto/human-loop-design: pass
+(fixes above where agent-owned; see PDF page 3)
 
 ## Business gaps
 payer: red · take_money: amber · stranger_proof: amber · loop: green
