@@ -21,7 +21,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from reality_check import before_after, intake, judge, skus, store, stripe_poll, stripe_webhook, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
@@ -112,14 +112,21 @@ def get_judge(job_id: str) -> Verdict:
         raise HTTPException(404, "no such job")
 
 
+RATER_COOKIE = "rc_r"
+
+
 @app.get("/rate/{job_id}", response_class=HTMLResponse)
-def rate_page(job_id: str, src: str = "local", r: str | None = None, teracSubmissionId: str | None = None) -> str:
+def rate_page(job_id: str, request: Request, response: Response, src: str = "local", r: str | None = None, teracSubmissionId: str | None = None) -> str:
     job = store.get_job(job_id)
     if not job:
         raise HTTPException(404, "no such job")
-    # venue NAT: every phone shares one IP, so anonymous respondents get a per-page uuid,
-    # never the client IP (UNIQUE(job,source,respondent,claim) would silently drop them)
-    respondent = teracSubmissionId or r or uuid.uuid4().hex[:12]
+    # venue NAT: every phone shares one IP, so anonymous respondents get a uuid, never the client
+    # IP. The uuid sticks in a cookie so the same phone keeps one identity across jobs: that is
+    # what makes "fresh eyes" on a before/after enforceable for in-room raters too.
+    sticky = request.cookies.get(RATER_COOKIE)
+    respondent = teracSubmissionId or r or sticky or uuid.uuid4().hex[:12]
+    if not teracSubmissionId and not r and not sticky:
+        response.set_cookie(RATER_COOKIE, respondent, max_age=86400, samesite="lax")
     if teracSubmissionId:
         src = "terac"
     hq = html.escape(job["state"].get("human_question") or "")

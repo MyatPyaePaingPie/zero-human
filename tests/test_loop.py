@@ -176,3 +176,23 @@ def test_full_reality_check_bundle_lenses():
     assert lenses == ["clarity"] + ["demand"] * 6 + ["autonomy"] and v["status"] == "awaiting_humans"
     page = c.get(f"/verdict/{jid}").text
     assert "clarity" in page and "demand" in page and "autonomy" in page and "economics" in page
+
+
+def test_unpaid_request_cannot_spend_and_revenue_once():
+    from reality_check import store
+    from reality_check.policy import envelope
+    assert envelope.check(arm="linq_panel", price_usd=1.0, paid_usd=0.0).allow is False
+    assert store.ledger_add_once("dup-job", "revenue", 8.0, "x") is True
+    assert store.ledger_add_once("dup-job", "revenue", 8.0, "x") is False
+
+
+def test_anonymous_rater_gets_sticky_identity():
+    from fastapi.testclient import TestClient
+    from reality_check.api import app
+    cc = TestClient(app)
+    a = cc.post("/judge", json={"input": "v1", "claim": "It is clear", "sku": "reality_check"}, headers={"X-RC-Paid": "8"}).json()
+    import re
+    p1 = cc.get(f"/rate/{a['job_id']}").text; r1 = re.search(r'name=respondent value="([0-9a-f]{12})"', p1).group(1)
+    b = cc.post("/judge", json={"input": "v2", "claim": "It is clear", "sku": "reality_check", "before_job_id": a["job_id"]}, headers={"X-RC-Paid": "8"}).json()
+    p2 = cc.get(f"/rate/{b['job_id']}").text; r2 = re.search(r'name=respondent value="([0-9a-f]{12})"', p2).group(1)
+    assert r1 == r2  # same phone, same identity across jobs

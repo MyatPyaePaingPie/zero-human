@@ -84,6 +84,7 @@ def _outcome(c: dict) -> float | None:
 
 def arm_stats() -> dict[str, ArmStat]:
     stats = {a.name: ArmStat(a.name) for a in voi.DEFAULT_ARMS}
+    stats["local_panel"] = ArmStat("local_panel")   # free in-room page: measured, never routed by VOI
     seen: set[str] = set()
     per_arm_briers: dict[str, list[float]] = {}
     per_arm_weighted: dict[str, list[float]] = {}
@@ -91,7 +92,7 @@ def arm_stats() -> dict[str, ArmStat]:
         if j["job_id"] in seen:
             continue
         seen.add(j["job_id"])
-        arm = ((j["state"].get("voi") or {}).get("arm")) or None
+        arm = j["state"].get("arm_used") or ((j["state"].get("voi") or {}).get("arm")) or None
         if not arm or arm not in stats:
             continue
         s = stats[arm]

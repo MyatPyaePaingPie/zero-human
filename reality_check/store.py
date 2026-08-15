@@ -107,6 +107,15 @@ def ledger_add(job_id: str | None, kind: str, amount_usd: float, note: str = "")
         c.execute("INSERT INTO ledger(job_id,kind,amount_usd,note,created_at) VALUES(?,?,?,?,?)", (job_id, kind, amount_usd, note, now()))
 
 
+def ledger_add_once(job_id: str, kind: str, amount_usd: float, note: str = "") -> bool:
+    """Write the row only if this job has no row of this kind yet (payment retries must not double-count)."""
+    with _lock, conn() as c:
+        if c.execute("SELECT 1 FROM ledger WHERE job_id=? AND kind=? LIMIT 1", (job_id, kind)).fetchone():
+            return False
+        c.execute("INSERT INTO ledger(job_id,kind,amount_usd,note,created_at) VALUES(?,?,?,?,?)", (job_id, kind, amount_usd, note, now()))
+    return True
+
+
 def ledger_totals() -> dict:
     with conn() as c:
         rows = c.execute("SELECT kind, SUM(amount_usd) s, COUNT(*) n FROM ledger GROUP BY kind").fetchall()

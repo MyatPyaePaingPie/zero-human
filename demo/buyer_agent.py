@@ -47,12 +47,28 @@ def write(product: str, feedback: list[str] | None = None) -> str:
     return r.json()["choices"][0]["message"]["content"].strip()
 
 
-def judge(base: str, copy: str, stakes: float, budget: float, paid: float) -> dict:
-    r = httpx.post(f"{base}/judge", timeout=180, headers={"X-RC-Paid": str(paid)} if paid else {},
-                   json={"input": copy, "sku": "reality_check", "evidence_standard": "voi_routed", "cost_if_wrong_usd": stakes,
-                         "max_budget_usd": budget, "buyer_id": "agent:landing-writer"})
-    r.raise_for_status()
-    return r.json()
+DEV = os.environ.get("RC_DEV") == "1"
+
+
+def judge(base: str, copy: str, stakes: float, budget: float, paid: float, wait_pay_s: int = 600) -> dict:
+    """Paid path: create an order, hand the Payment Link to whoever pays (QR at the table or the
+    agent's own card), and wait for the Stripe poller to start the job. Dev path (RC_DEV=1 on both
+    sides): the X-RC-Paid header, revenue not Stripe-backed and labeled as such."""
+    body = {"input": copy, "sku": "reality_check", "evidence_standard": "voi_routed", "cost_if_wrong_usd": stakes,
+            "max_budget_usd": budget, "buyer_id": "agent:landing-writer"}
+    if not paid or DEV:
+        r = httpx.post(f"{base}/judge", timeout=180, headers={"X-RC-Paid": str(paid)} if (paid and DEV) else {}, json=body)
+        r.raise_for_status()
+        return r.json()
+    o = httpx.post(f"{base}/order", timeout=60, json=body).raise_for_status().json()
+    print(f"  order {o['job_id']}: pay ${o['price_usd']:.2f} at {o['pay_url']}", flush=True)
+    t0 = time.time()
+    while time.time() - t0 < wait_pay_s:
+        v = httpx.get(f"{base}/order/{o['job_id']}", timeout=180).json()
+        if v.get("status") != "pending_payment":
+            return v
+        time.sleep(5)
+    raise SystemExit("payment did not arrive; nothing judged, nothing spent")
 
 
 def wait_for_humans(base: str, job_id: str, timeout_s: int) -> dict:

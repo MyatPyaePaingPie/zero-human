@@ -29,8 +29,10 @@ export RC_ENVELOPE_SECRET=...                     # then: cp state/envelope.exam
 ```
 Dev only: `RC_DEV=1` makes `X-RC-Paid: <usd>` count as payment on /judge and /intake.
 
-Demo: `python demo/buyer_agent.py "PitchPolish"` writes copy, buys judgment, shows the router
-refusing at low stakes and buying at high stakes, rewrites from human feedback, prints before/after.
+Demo: `python demo/buyer_agent.py "PitchPolish"` writes copy, creates an order and prints the Payment
+Link (someone pays; the poller starts the job), shows the router refusing at low stakes and buying at
+high stakes, rewrites from human feedback, prints before/after. `RC_DEV=1` on both sides uses the
+dev header instead (revenue then is not Stripe-backed).
 
 Bundle SKU `full_reality_check` ($25): one paste, every lens (clarity, demand gate, the team's own
 autonomy claims, economics). `GET /verdict/{job}` renders the verdict grouped by lens.

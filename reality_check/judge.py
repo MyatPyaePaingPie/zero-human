@@ -94,7 +94,7 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     store.put_job(job_id, req.buyer_id, "evaluating", req.model_dump(), {})
     store.event(job_id, "job.created", {"sku": req.sku, "claims": req.claims, "buyer": req.buyer_id})
     if paid_usd > 0:
-        store.ledger_add(job_id, "revenue", paid_usd, f"{req.sku} sold")
+        store.ledger_add_once(job_id, "revenue", paid_usd, f"{req.sku} sold")
 
     personas = req.personas or skus.default_personas(req.sku)
     claims, cost = [], 0.0
@@ -142,6 +142,8 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
             handle = panels.REGISTRY["local"].launch(job_id, state["human_question"] or req.claims[0], req.input, HUMAN_TARGET_N)
         state["panel"] = handle.__dict__
         state["launched_at"] = store.now()
+        # learning attributes outcomes to the arm that actually recruited, not the one VOI named
+        state["arm_used"] = {"local": "local_panel", "linq": "linq_panel", "terac": decision.arm if decision.arm.startswith("terac") else "terac_general"}.get(handle.source, handle.source)
         if handle.price_usd:
             store.ledger_add(job_id, f"cost.{handle.source}", handle.price_usd, f"panel n={handle.n_requested}")
         store.event(job_id, "panel.launched", state["panel"])

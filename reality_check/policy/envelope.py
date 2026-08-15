@@ -9,6 +9,7 @@ panel purchase passes through `check()` before `panel.launch()`. Fail closed:
 - price > per_job_cap_usd                                    -> deny
 - today's evidence spend + price > daily_cap_usd             -> deny
 - price > paid_usd * (1 - min_margin_ratio) when paid_usd>0  -> deny (never sell at a loss)
+- paid_usd == 0 and price > unpaid_per_job_cap_usd (default 0) -> deny (unpaid callers cannot spend)
 
 The LLM never sees or holds the envelope. Free text anywhere in a request cannot raise a cap.
 
@@ -36,7 +37,7 @@ from reality_check import store
 
 ENVELOPE_PATH = Path(os.environ.get("RC_ENVELOPE", "state/envelope.json"))
 FREE_ARMS = {"ensemble", "local", "local_panel"}
-SIGNED_FIELDS = ("daily_cap_usd", "per_job_cap_usd", "min_margin_ratio", "allowed_arms", "expires_at", "signed_by")
+SIGNED_FIELDS = ("daily_cap_usd", "per_job_cap_usd", "min_margin_ratio", "allowed_arms", "expires_at", "signed_by", "unpaid_per_job_cap_usd")
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,8 @@ def check(*, arm: str, price_usd: float, paid_usd: float = 0.0, now: datetime | 
         return SpendDecision(False, f"price ${price_usd:.2f} exceeds per_job_cap ${float(env['per_job_cap_usd']):.2f}", True, spent, price_usd)
     if spent + price_usd > float(env["daily_cap_usd"]):
         return SpendDecision(False, f"daily cap ${float(env['daily_cap_usd']):.2f} would be exceeded (spent ${spent:.2f})", True, spent, price_usd)
+    if paid_usd <= 0.0 and price_usd > float(env.get("unpaid_per_job_cap_usd", 0.0)):
+        return SpendDecision(False, f"unpaid request may not spend ${price_usd:.2f} (unpaid_per_job_cap ${float(env.get('unpaid_per_job_cap_usd', 0.0)):.2f})", True, spent, price_usd)
     mm = float(env.get("min_margin_ratio", 0.0))
     if paid_usd > 0.0 and price_usd > paid_usd * (1.0 - mm):
         return SpendDecision(False, f"price ${price_usd:.2f} breaks margin floor on ${paid_usd:.2f} sale", True, spent, price_usd)
