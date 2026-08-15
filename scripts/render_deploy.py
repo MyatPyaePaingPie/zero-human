@@ -14,7 +14,7 @@ SECRETS = ["GROQ_API_KEY", "OPENAI_API_KEY", "ZEROHUMAN_STRIPE_WRITE_KEY", "RC_P
            "TERAC_API_KEY", "REPLAY_API_KEY", "RC_ENVELOPE_SECRET", "LINQ_API_KEY", "LINQ_WEBHOOK_SECRET"]
 PLAIN = {"PYTHON_VERSION": "3.12.6", "RC_DB": "/var/data/rc.db", "RC_ENVELOPE": "/var/data/envelope.json",
          "RC_DEADLINE_ISO": "2026-08-15T18:30:00-07:00", "RC_HUMAN_TIMEOUT_S": "1800", "TERAC_CPI_USD": "4.5",
-         "TERAC_PROJECT_ID": "fskntvr1bh3szfuyj8jsem2r"}
+         "TERAC_PROJECT_ID": "fskntvr1bh3szfuyj8jsem2r", "RC_TERAC_AUTO": "1", "RC_TERAC_N": "3", "RC_TERAC_AUTHORIZE_USD": "25"}
 
 
 def kc(name: str) -> str:

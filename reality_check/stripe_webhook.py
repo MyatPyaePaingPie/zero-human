@@ -68,6 +68,15 @@ def complete_session(session: dict) -> dict:
             req = JudgeRequest(**job["request"])
             judge.start(req, paid_usd=amount, job_id=job_id)  # ledger revenue row is written inside start()
             out = {"started": job_id, "amount_usd": amount}
+            # the Terac switch (Aria, 17:xx): every paid session (promo-code $0 included) launches its
+            # human panel; the operator authorization is the env, the envelope caps still apply
+            if os.environ.get("RC_TERAC_AUTO") == "1" and (req.evidence_standard or "") == "human_backed":
+                try:
+                    out["humans"] = judge.launch_humans(job_id, arm="terac_general", n=int(os.environ.get("RC_TERAC_N", "3")),
+                                                        authorize_usd=float(os.environ.get("RC_TERAC_AUTHORIZE_USD", "25")),
+                                                        operator="auto:RC_TERAC_AUTO")
+                except Exception as exc:
+                    store.event(job_id, "panel.auto_error", {"error": str(exc)[:200]})
         elif not job:
             # paid with no matching order (QR walk-up): placeholder job the operator fills in
             jid = job_id or f"walkup-{session_id[-8:]}"

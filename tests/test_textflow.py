@@ -208,3 +208,27 @@ def test_paid_text_flow_creates_pending_order_and_sends_paylink_second(monkeypat
     with store.conn() as c:
         row = c.execute("SELECT amount_usd FROM ledger WHERE job_id=? AND kind='revenue'", (tf["job_id"],)).fetchone()
     assert row and abs(row["amount_usd"] - 8.0) < 1e-6
+
+
+def test_paid_session_auto_launches_terac_when_switch_on(monkeypatch):
+    from reality_check import judge as judge_module, panels, stripe_webhook, store
+    from reality_check.policy import envelope as env_mod
+    monkeypatch.setattr(judge_module, "_launch_probes", lambda job_id, url: None)
+    monkeypatch.setattr(judge_module, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.delenv("RC_TEXT_FREE", raising=False)
+    monkeypatch.setenv("RC_PAYLINK_DEFAULT", "https://buy.stripe.com/test_link")
+    monkeypatch.setenv("RC_TERAC_AUTO", "1")
+    monkeypatch.setattr(env_mod, "gate_panel_launch", lambda job_id, arm, price, paid: price <= 20)
+    launched = {}
+    class FakeTerac:
+        name = "terac"
+        def launch(self, job_id, question, input_text, n, approve=None):
+            launched["n"] = n; assert approve(18.0)
+            return panels.PanelHandle("terac", "opp_auto", f"http://x/rate/{job_id}", n, 18.0)
+    monkeypatch.setitem(panels.REGISTRY, "terac", FakeTerac())
+    out = linq_client.handle_inbound(_inbound_event("+15550009999", "https://github.com/acme/rockets"))
+    jid = out["textflow"]["job_id"]
+    res = stripe_webhook.complete_session({"id": "cs_auto_" + jid, "payment_status": "paid", "amount_total": 0,
+                                           "client_reference_id": jid, "customer_details": {}})
+    assert res.get("started") == jid and res.get("humans", {}).get("launched") is True
+    assert launched["n"] == 3 and store.get_job(jid)["state"]["panel"]["external_id"] == "opp_auto"
