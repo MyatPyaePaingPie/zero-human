@@ -14,3 +14,6 @@ Verified live: https://reality-check-0f80.onrender.com /ledger 200, envelope sel
 Failed / surprised: first commit of docs landed on the Vaults session branch (cwd slip; reset + force-with-lease). Render Starter needs a card (402): running free tier, no disk, keepalive ping from this laptop. Aria pasted a Replay token under RENDER_API_KEY once (deleted). Replay-guard hash fallback was 409ing identical bodies (now nonce-only). Envelope example expired 16:59 local (UTC typo, fixed). Guard correctly blocked keychain-read+curl in one line; scripts pattern used instead.
 
 Deferred: Terac real launch is a ~5pm decision by Aria ($13.50 of $25). Superserve pause/resume, Pioneer (paywalled), Venn skipped. Storefront with keydriver session (docs/lovable-prompt.md). Replay bugs from the self-audit not yet triaged.
+
+## 12:30 update
+Aria moved all judgement to GitHub issues (#1-#18, epic #18) and adopted the matra execution protocol; I filed the DAG plan (`_meta/plans/2026-08-15-issue-queue-dag.md`) and a status-first handoff (`_meta/handoff.md`). Started writing lenses.py before being told to stop; left untracked, noted. Sweep of 20 PH launches ran end to end once (15/19 clear) then was wiped by a redeploy on the free tier; re-queued. Linq inbound loop live and unproven (nobody texted yet). Reviewer round 4/5: all code findings closed; only operational items remain.
