@@ -23,6 +23,7 @@ export RC_DEADLINE_ISO=2026-08-15T18:30:00-07:00  # router refuses evidence that
 export ZEROHUMAN_STRIPE_RESTRICTED_KEY=rk_live_...                # restricted READ-ONLY key: poller turns paid sessions into jobs
 export RC_PAYLINK_DEFAULT=https://buy.stripe.com/... # Payment Link; /order appends ?client_reference_id=<job>
 export TERAC_API_KEY=... TERAC_PROJECT_ID=...     # real Terac launches; absent = dry handle, nothing charged
+export LINQ_API_KEY=... LINQ_WEBHOOK_SECRET=whsec_... # Linq: raters join by texting our line; panel texts the rate link; verdicts by text (notify_phone)
 export REPLAY_API_KEY=lqa_...                     # Replay QA (qa.replay.io) crawls intake live URLs; objective evidence in the verdict
 export RC_ENVELOPE_SECRET=...                     # then: cp state/envelope.example.json state/envelope.json && python -m reality_check.policy.envelope sign
 ./run.sh   # loads the vars above from the keychain (service == var name), signs the envelope, starts uvicorn

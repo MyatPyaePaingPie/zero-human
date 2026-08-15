@@ -17,6 +17,8 @@ X-RC-Paid is honoured only when RC_DEV=1.
 from __future__ import annotations
 
 import html
+import json
+import os
 import uuid
 from contextlib import asynccontextmanager
 
@@ -24,7 +26,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from reality_check import before_after, intake, judge, skus, store, stripe_poll, stripe_webhook, terac_client
+from reality_check import before_after, intake, judge, linq_client, skus, store, stripe_poll, stripe_webhook, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
 from reality_check.policy import envelope, learning, protocol
 
@@ -42,6 +44,7 @@ store.init()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"], allow_credentials=False)
 app.include_router(stripe_webhook.router)
 terac_client.register()
+linq_client.register()
 
 TERAC_CALLBACK = "https://terac.com/api/external/callback"
 
@@ -190,6 +193,20 @@ async def rate_submit(job_id: str, request: Request):
     if src == "terac" and form.get("respondent"):
         return RedirectResponse(f"{TERAC_CALLBACK}?teracSubmissionId={respondent}&result=completed", status_code=303)
     return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:18px system-ui;margin:3rem'>Thanks. That's it.</p>")
+
+
+@app.post("/linq/webhook")
+async def linq_webhook(request: Request):
+    body = await request.body()
+    secret = os.environ.get("LINQ_WEBHOOK_SECRET", "")
+    if not linq_client.verify_signature(dict(request.headers), body, secret):
+        raise HTTPException(400, "bad signature")
+    return linq_client.handle_inbound(json.loads(body))
+
+
+@app.get("/raters")
+def raters() -> dict:
+    return {"opted_in": store.raters_count(), "linq_enabled": linq_client.enabled()}
 
 
 @app.get("/verdict/{job_id}", response_class=HTMLResponse)

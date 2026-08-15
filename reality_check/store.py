@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS payment_claims (
   session_id TEXT PRIMARY KEY, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS raters (
+  phone TEXT PRIMARY KEY, opted_out INTEGER NOT NULL DEFAULT 0, joined_at TEXT NOT NULL, last_sent_at TEXT
+);
 """
 
 
@@ -94,6 +97,33 @@ def claim_payment(session_id: str) -> bool:
 def release_payment_claim(session_id: str) -> None:
     with _lock, conn() as c:
         c.execute("DELETE FROM payment_claims WHERE session_id=?", (session_id,))
+
+
+def rater_upsert(phone: str, *, opted_out: bool) -> bool:
+    """True if newly enrolled."""
+    with _lock, conn() as c:
+        row = c.execute("SELECT 1 FROM raters WHERE phone=?", (phone,)).fetchone()
+        if row:
+            c.execute("UPDATE raters SET opted_out=? WHERE phone=?", (int(opted_out), phone))
+            return False
+        c.execute("INSERT INTO raters(phone,opted_out,joined_at) VALUES(?,?,?)", (phone, int(opted_out), now()))
+        return True
+
+
+def raters_pick(n: int) -> list[str]:
+    with conn() as c:
+        rows = c.execute("SELECT phone FROM raters WHERE opted_out=0 ORDER BY last_sent_at IS NOT NULL, last_sent_at ASC LIMIT ?", (n,)).fetchall()
+    return [r["phone"] for r in rows]
+
+
+def rater_touch(phone: str) -> None:
+    with _lock, conn() as c:
+        c.execute("UPDATE raters SET last_sent_at=? WHERE phone=?", (now(), phone))
+
+
+def raters_count() -> int:
+    with conn() as c:
+        return int(c.execute("SELECT COUNT(*) n FROM raters WHERE opted_out=0").fetchone()["n"])
 
 
 def human_answers(job_id: str) -> list[dict]:

@@ -202,3 +202,23 @@ def test_rating_closed_until_job_starts():
     o = c.post("/order", json={"input": "x", "claim": "y"}).json()
     assert c.get(f"/rate/{o['job_id']}").status_code == 409
     assert c.post(f"/rate/{o['job_id']}", data={"c0": "yes", "n_claims": "1"}).status_code == 409
+
+
+def test_linq_webhook_enrolls_and_panel_falls_back_when_dry(monkeypatch):
+    import base64, json, time, hmac, hashlib
+    from reality_check import linq_client, store
+    secret_raw = b"0123456789abcdef0123456789abcdef"
+    secret = "whsec_" + base64.b64encode(secret_raw).decode()
+    monkeypatch.setenv("LINQ_WEBHOOK_SECRET", secret)
+    ev = {"event_type": "message.received", "data": {"sender_handle": {"handle": "+15550001111"}, "parts": [{"type": "text", "value": "hi"}]}}
+    body = json.dumps(ev).encode(); ts = str(int(time.time())); mid = "msg_1"
+    sig = "v1," + base64.b64encode(hmac.new(secret_raw, f"{mid}.{ts}.".encode() + body, hashlib.sha256).digest()).decode()
+    r = c.post("/linq/webhook", content=body, headers={"webhook-id": mid, "webhook-timestamp": ts, "webhook-signature": sig, "content-type": "application/json"})
+    assert r.status_code == 200 and r.json().get("enrolled")
+    assert c.post("/linq/webhook", content=body, headers={"webhook-id": mid, "webhook-timestamp": ts, "webhook-signature": "v1,bad"}).status_code == 400
+    assert store.raters_count() == 1
+    # no LINQ_API_KEY in tests: panel recruits nobody -> judge falls back to local page, job still awaits humans
+    v = c.post("/judge", json={"input": "x", "claim": "It is clear", "sku": "reality_check", "notify_phone": "+15550002222"}, headers={"X-RC-Paid": "8"}).json()
+    assert v["status"] == "awaiting_humans"
+    kinds = [e["kind"] for e in c.get("/events?limit=80").json() if e["job_id"] == v["job_id"]]
+    assert "linq.nobody" in kinds and "panel.fallback" in kinds

@@ -14,7 +14,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from reality_check import evaluators, panels, replay_client, skus, store
+from reality_check import evaluators, linq_client, panels, replay_client, skus, store
 from reality_check.core import consensus, voi
 from reality_check.core.brier import brier
 from reality_check.core.models import ClaimVerdict, JudgeRequest, Verdict, VoiDecision
@@ -151,7 +151,20 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     else:
         store.put_job(job_id, req.buyer_id, "settled", req.model_dump(), state)
         store.event(job_id, "job.settled", {"via": "internal"})
+        _notify(job_id)
     return verdict(job_id)
+
+
+def _notify(job_id: str) -> None:
+    """Text the buyer once per job when it settles (Linq), if they asked."""
+    job = store.get_job(job_id)
+    phone = (job or {}).get("request", {}).get("notify_phone")
+    if not phone or (job["state"] or {}).get("notified"):
+        return
+    v = verdict(job_id)
+    linq_client.notify_verdict(job_id, phone, f"{v.verdict} (p={v.p:.2f}, {v.n_humans} humans). {v.summary[:120]}")
+    job["state"]["notified"] = True
+    store.put_job(job_id, job["buyer_id"], job["status"], job["request"], job["state"])
 
 
 def _answers_by_claim(job_id: str) -> dict[int, list[dict]]:
@@ -198,6 +211,7 @@ def _settle_against_humans(job: dict, by_claim: dict[int, list[dict]]) -> None:
     state["settled_n_humans"] = len(by_claim.get(0, []))
     store.put_job(job["job_id"], job["buyer_id"], "settled", job["request"], state)
     store.event(job["job_id"], "job.settled", {"via": "humans", "flipped_claims": flipped, "n_humans": len(by_claim.get(0, []))})
+    _notify(job["job_id"])
 
 
 def _claim_verdict(c: dict, answers: list[dict]) -> ClaimVerdict:
