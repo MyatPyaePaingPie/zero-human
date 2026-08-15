@@ -21,6 +21,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from reality_check import before_after, intake, judge, skus, store, stripe_poll, stripe_webhook, terac_client
@@ -37,6 +38,8 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Reality Check", version="0.0.1", lifespan=_lifespan)
 store.init()
+# Storefront (Lovable) is a separate origin reading public JSON; no credentials cross.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"], allow_credentials=False)
 app.include_router(stripe_webhook.router)
 terac_client.register()
 
@@ -213,6 +216,30 @@ def verdict_page(job_id: str) -> str:
 <h1>Verdict: {html.escape(v.verdict)} <small>(p={v.p:.2f}, {v.status})</small></h1>
 <p>{html.escape(v.summary)}</p>{''.join(blocks)}{econ}
 <p><small>job {v.job_id}. Human answers: {v.n_humans}. Evaluators: {v.n_evaluators}.</small></p>"""
+
+
+@app.get("/summary")
+def summary() -> dict:
+    """One call for the storefront dashboard: money, counts, learning lines, recent jobs (compact)."""
+    t = store.ledger_totals()
+    vs = [judge.verdict(j["job_id"]) for j in store.list_jobs(limit=30)]
+    by_status: dict[str, int] = {}
+    for v in vs:
+        by_status[v.status] = by_status.get(v.status, 0) + 1
+    rep = learning.report()
+    return {
+        "money": t,
+        "counts": {"jobs": len(vs), "by_status": by_status, "humans": sum(v.n_humans for v in vs),
+                   "voi_bought": sum(1 for v in vs if v.voi and v.voi.buy), "voi_declined": sum(1 for v in vs if v.voi and not v.voi.buy)},
+        "learning": {"swarm_check": rep.get("swarm_check"), "arms": rep.get("arms")},
+        "skus": {k: {"price_usd": v["price_usd"], "evidence_standard": v.get("evidence_standard", "voi_routed"), "claims": v["claims"]}
+                 for k, v in skus.SKUS.items() if k != "custom"},
+        "pay_links": {k: stripe_webhook.pay_link(k) for k in ("reality_check", "full_reality_check")},
+        "recent": [{"job_id": v.job_id, "status": v.status, "verdict": v.verdict, "p": v.p, "n_humans": v.n_humans,
+                    "sku": (store.get_job(v.job_id) or {}).get("request", {}).get("sku"),
+                    "voi": {"buy": v.voi.buy, "arm": v.voi.arm, "reason": v.voi.reason} if v.voi else None,
+                    "revenue_usd": v.revenue_usd, "evidence_cost_usd": v.evidence_cost_usd, "summary": v.summary} for v in vs],
+    }
 
 
 @app.get("/ledger")
