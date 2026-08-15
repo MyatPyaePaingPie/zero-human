@@ -11,6 +11,7 @@ from tests.test_report import HACKATHON_FIXTURE
 def _no_launch(monkeypatch):
     monkeypatch.setattr(judge, "_launch_probes", lambda job_id, url: None)
     monkeypatch.setattr(judge, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.setenv("RC_TEXT_FREE", "1")   # existing tests cover the free (room) path
 
 
 def _dry_sends(job_id: str | None = None) -> list[dict]:
@@ -99,7 +100,15 @@ def test_on_report_ready_sends_once(monkeypatch):
 
     store.patch_job_state(job_id, "hackathon", HACKATHON_FIXTURE)
     textflow.on_report_ready(job_id)
-
+    # no humans yet: NO report, one status text ("graded, humans reading"), never a model-only report
+    assert not [e for e in store.events(200) if e["job_id"] == job_id and e["kind"] == "text.result_sent"]
+    assert len([e for e in store.events(200) if e["job_id"] == job_id and e["kind"] == "text.graded_sent"]) == 1
+    textflow.on_humans_timeout(job_id)
+    assert len([e for e in store.events(200) if e["job_id"] == job_id and e["kind"] == "text.wait_sent"]) == 1
+    assert not [e for e in store.events(200) if e["job_id"] == job_id and e["kind"] == "text.result_sent"]
+    # humans land: the final report goes out once, with the humans line inside
+    store.add_human_answer(job_id, "local", "r1", True, "makes sense", claim_idx=0)
+    textflow.on_humans_ready(job_id)
     sent_events = [e for e in store.events(200) if e["job_id"] == job_id and e["kind"] == "text.result_sent"]
     assert len(sent_events) == 1, "one send recorded for this job"
     # payload text in the dry event is truncated to 80 chars by linq_client.send; fetch the
@@ -143,15 +152,18 @@ def test_on_humans_ready_two_answers(monkeypatch):
     store.add_human_answer(job_id, "local", "r2", False, "confusing headline", claim_idx=0)
 
     textflow.on_humans_ready(job_id)
+    assert not [e for e in _dry_sends() if e["job_id"] == job_id], "no rubric yet: nothing sent"
+    store.patch_job_state(job_id, "hackathon", HACKATHON_FIXTURE)
+    textflow.on_humans_ready(job_id)
     sends = [e for e in _dry_sends() if e["job_id"] == job_id]
-    assert sends, "expected a dry send for the humans line"
+    assert sends, "expected the final send with the humans line"
     from reality_check import store as store_mod  # noqa: F401
     job = store.get_job(job_id)
     # recompose to check the full (untruncated) text
     n = len(store.human_answers(job_id))
     assert n == 2
-    full_texts = [e["payload"]["text"] for e in sends]
-    assert any(("2 strangers" in t) or ("of 2" in t) for t in full_texts)
+    full = textflow._compose_humans(job_id)
+    assert "2 strangers" in full and "of 2" in full
 
 
 def test_humans_keyword_before_answers_says_not_in_yet(monkeypatch):
@@ -164,3 +176,35 @@ def test_humans_keyword_before_answers_says_not_in_yet(monkeypatch):
     sends = [e for e in _dry_sends() if e["payload"]["to"] == linq_client.rater_id(phone)]
     not_in_yet = [e for e in sends if "Not in yet" in e["payload"]["text"]]
     assert len(not_in_yet) == 1
+
+
+def test_paid_text_flow_creates_pending_order_and_sends_paylink_second(monkeypatch):
+    """Default (RC_TEXT_FREE unset): job waits in pending_payment; ack has no link; second text
+    carries the Payment Link with client_reference_id; the poller's complete_session starts it."""
+    monkeypatch.setattr(judge, "_launch_probes", lambda job_id, url: None)
+    monkeypatch.setattr(judge, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.delenv("RC_TEXT_FREE", raising=False)
+    monkeypatch.setenv("RC_PAYLINK_DEFAULT", "https://buy.stripe.com/test_link")
+    n0 = len(_dry_sends())
+    out = linq_client.handle_inbound(_inbound_event("+15550001111", "https://github.com/acme/rockets"))
+    tf = out["textflow"]
+    assert tf["action"] == "pending_payment"
+    job = store.get_job(tf["job_id"])
+    assert job["status"] == "pending_payment" and job["buyer_id"].startswith("text:")
+    texts = [e["payload"]["text"] for e in _dry_sends() if e.get("job_id") == tf["job_id"]]
+    assert texts, "no dry sends recorded for the job"
+    # welcome (new rater) + ack + pay link: the FIRST job-related text has no link, the pay text does
+    acks = [t for t in texts if t.startswith("Got it")]
+    assert acks and "http" not in acks[0]
+    assert any("buy.stripe.com/test_link" in t for t in texts)   # dry events keep the first 80 chars
+    created = [e for e in store.events(200) if e["kind"] == "order.created" and e["job_id"] == tf["job_id"]]
+    assert created and created[0]["payload"]["pay_url"].endswith("?client_reference_id=" + tf["job_id"])
+    # payment lands: complete_session starts the job with revenue
+    from reality_check import stripe_webhook
+    res = stripe_webhook.complete_session({"id": "cs_text_" + tf["job_id"], "payment_status": "paid", "amount_total": 800,
+                                           "client_reference_id": tf["job_id"], "customer_details": {}})
+    assert res.get("started") == tf["job_id"]
+    assert store.get_job(tf["job_id"])["status"] in ("settled", "awaiting_humans", "evaluating")
+    with store.conn() as c:
+        row = c.execute("SELECT amount_usd FROM ledger WHERE job_id=? AND kind='revenue'", (tf["job_id"],)).fetchone()
+    assert row and abs(row["amount_usd"] - 8.0) < 1e-6

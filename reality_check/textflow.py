@@ -10,6 +10,8 @@ functions gate on a state flag before texting.
 """
 from __future__ import annotations
 
+import os
+
 import re
 from typing import Any
 
@@ -17,6 +19,10 @@ from reality_check import sources, store
 from reality_check.panels import PUBLIC_BASE
 
 ASK_LINE = "Send me a link to your repo, your slides, or your landing page. Any one works, all three is best."
+TEXT_PRICE_USD = 8.0
+PAY_ACK_LINE = ("Got it. Reading your repo and page now. Next text is your payment link ($8); the report comes "
+                "right after.")
+PAY_LINE = "Reality Check, $8: {url}  You get the hackathon verdict, sponsor tracks, the autonomy grade, a PDF and an agent.md for your coding agent."
 ACK_LINE = ("Got it. Reading your repo and page now. Grading it against today's rubric and the sponsor tracks. "
             "Give me about two minutes.")
 RERUN_ACK_LINE = "Re-running on the same links..."
@@ -65,8 +71,8 @@ def start_from_text(phone: str, text: str, *, before_job_id: str | None = None) 
     links = parse_links(text)
     req = JudgeRequest(
         sku="full_reality_check",
-        evidence_standard="voi_routed",
-        max_budget_usd=0,
+        evidence_standard="human_backed",   # not a Reality Check without real people
+        max_budget_usd=0.0 if text_is_free() else TEXT_PRICE_USD,
         buyer_id=f"text:{linq_client.rater_id(phone)}",
         notify_phone=phone,
         repo=links["repo"],
@@ -75,9 +81,27 @@ def start_from_text(phone: str, text: str, *, before_job_id: str | None = None) 
         input=links["pitch"] or "",
         before_job_id=before_job_id,
     )
-    v = judge.start(req)
-    store.text_thread_put(linq_client.rater_id(phone), v.job_id, links)
-    return {"job_id": v.job_id, "links": links}
+    if text_is_free():
+        v = judge.start(req)
+        store.text_thread_put(linq_client.rater_id(phone), v.job_id, links)
+        return {"job_id": v.job_id, "links": links, "paid": False, "pay_url": None}
+    # paid path: the same pending_payment order the web flow uses; the Stripe poller/webhook calls
+    # complete_session -> judge.start(paid_usd) when the Payment Link session is paid, which writes
+    # the revenue row and (through the hackathon thread) triggers on_report_ready
+    import uuid
+    from reality_check import stripe_webhook
+    job_id = uuid.uuid4().hex[:12]
+    store.put_job(job_id, req.buyer_id, "pending_payment", req.model_dump(), {"text_thread": True})
+    link = os.environ.get("RC_PAYLINK_TEXT") or stripe_webhook.pay_link("reality_check")
+    pay_url = f"{link}?client_reference_id={job_id}" if link else None
+    store.event(job_id, "order.created", {"sku": req.sku, "via": "text", "pay_url": pay_url})
+    store.text_thread_put(linq_client.rater_id(phone), job_id, links)
+    return {"job_id": job_id, "links": links, "paid": True, "pay_url": pay_url}
+
+
+def text_is_free() -> bool:
+    """RC_TEXT_FREE=1 skips the payment link (room override). Default OFF: the text thread sells."""
+    return os.environ.get("RC_TEXT_FREE", "0") == "1"
 
 
 def handle_text(phone: str, text: str) -> dict:
@@ -115,6 +139,14 @@ def handle_text(phone: str, text: str) -> dict:
         return {"action": "ask"}
 
     result = start_from_text(phone, t)
+    if result.get("paid"):
+        # first outbound never carries a link (Linq sandbox rule); the pay link is the second text
+        linq_client.send(phone, PAY_ACK_LINE, job_id=result["job_id"])
+        if result.get("pay_url"):
+            linq_client.send(phone, PAY_LINE.format(url=result["pay_url"]), job_id=result["job_id"])
+        else:
+            store.event(result["job_id"], "text.no_paylink", {})
+        return {"action": "pending_payment", "job_id": result["job_id"], "links": result["links"]}
     linq_client.send(phone, ACK_LINE, job_id=result["job_id"])
     return {"action": "started", "job_id": result["job_id"], "links": result["links"]}
 
@@ -198,48 +230,78 @@ def _compose_result(job: dict, rep: dict) -> str:
     return "\n".join(p for p in lines if p)
 
 
-def on_report_ready(job_id: str) -> None:
-    """Call once the hackathon rubric has landed on state.hackathon (judge.py's background
-    thread fires ``hackathon.done``). Safe to call multiple times or on a job with no text
-    thread: no-op unless notify_phone is set, the hackathon section exists, and it hasn't
-    already been sent."""
+GRADED_LINE = ("Graded. {n} strangers are reading it now; your report arrives when they finish (usually under "
+               "30 minutes). It is not a report without them.")
+WAITING_LINE = ("Still waiting on the humans. Your grade is done, but a Reality Check without real people is not "
+                "one, so I am holding the report until they answer. I will text the moment they do.")
+
+
+def _final_ready(job: dict) -> bool:
+    """The report a person receives must contain the humans' answers (Aria, 15:35): final send only
+    when the rubric has landed AND at least one human has answered; before that, status texts only."""
+    st = job.get("state") or {}
+    return st.get("hackathon") is not None and bool(store.human_answers(job["job_id"]))
+
+
+def _send_final(job: dict) -> bool:
     from reality_check import linq_client, report
+    job_id = job["job_id"]
+    st = job.get("state") or {}
+    if st.get("text_result_sent"):
+        return False
+    phone = (job.get("request") or {}).get("notify_phone")
+    rep = report.build(job_id)
+    text = _compose_result(job, rep) + "\n" + _compose_humans(job_id)
+    linq_client.send(phone, text, job_id=job_id)
+    store.patch_job_state(job_id, "text_result_sent", True)
+    store.event(job_id, "text.result_sent", {})
+    return True
+
+
+def on_report_ready(job_id: str) -> None:
+    """Rubric landed (judge.py hackathon thread). If the humans are already in, send the final
+    report; otherwise one status text ("graded, humans reading") and wait. Idempotent."""
+    from reality_check import linq_client
 
     job = store.get_job(job_id)
-    if not job:
-        return
-    phone = (job.get("request") or {}).get("notify_phone")
-    if not phone:
+    if not job or not (job.get("request") or {}).get("notify_phone"):
         return
     st = job.get("state") or {}
     if st.get("hackathon") is None:
         return
-    if st.get("text_result_sent"):
+    if _final_ready(job):
+        _send_final(job)
         return
-    rep = report.build(job_id)
-    text = _compose_result(job, rep)
-    linq_client.send(phone, text, job_id=job_id)
-    store.patch_job_state(job_id, "text_result_sent", True)
-    store.event(job_id, "text.result_sent", {})
+    if not st.get("text_graded_sent"):
+        n = (st.get("panel") or {}).get("n") or 3
+        linq_client.send(job["request"]["notify_phone"], GRADED_LINE.format(n=n), job_id=job_id)
+        store.patch_job_state(job_id, "text_graded_sent", True)
+        store.event(job_id, "text.graded_sent", {})
 
 
-def on_humans_ready(job_id: str) -> None:
-    """Call once the human panel (Terac or local page) has settled answers. Safe to call
-    multiple times or with no notify_phone / no answers yet: no-op."""
+def on_humans_timeout(job_id: str) -> None:
+    """The panel timed out with no answers: never send a model-only report; one status text and
+    keep the rate page open (settle_on_timeout still records the model verdict for the ledger)."""
     from reality_check import linq_client
 
     job = store.get_job(job_id)
-    if not job:
-        return
-    phone = (job.get("request") or {}).get("notify_phone")
-    if not phone:
+    if not job or not (job.get("request") or {}).get("notify_phone"):
         return
     st = job.get("state") or {}
-    if st.get("text_humans_sent"):
+    if st.get("text_result_sent") or st.get("text_wait_sent"):
         return
+    if store.human_answers(job_id):
+        on_humans_ready(job_id)
+        return
+    linq_client.send(job["request"]["notify_phone"], WAITING_LINE, job_id=job_id)
+    store.patch_job_state(job_id, "text_wait_sent", True)
+    store.event(job_id, "text.wait_sent", {})
+
+
+def _compose_humans(job_id: str) -> str:
     answers = store.human_answers(job_id)
     if not answers:
-        return
+        return ""
     n = len(answers)
     claim0 = [a for a in answers if a.get("claim_idx") == 0]
     pool = claim0 or answers
@@ -248,7 +310,14 @@ def on_humans_ready(job_id: str) -> None:
     text = f"{n} strangers read your pitch: {yes0} of {len(pool)} could say what it does."
     if quotes:
         text += " " + " ".join(f'"{q}"' for q in quotes)
-    text += " Details in the PDF."
-    linq_client.send(phone, text, job_id=job_id)
-    store.patch_job_state(job_id, "text_humans_sent", True)
-    store.event(job_id, "text.humans_sent", {})
+    return text + " Details in the PDF."
+
+
+def on_humans_ready(job_id: str) -> None:
+    """Human answers landed (settle or later): send the final report if the rubric is in too;
+    else wait for on_report_ready to do it. Idempotent."""
+    job = store.get_job(job_id)
+    if not job or not (job.get("request") or {}).get("notify_phone"):
+        return
+    if _final_ready(job):
+        _send_final(job)

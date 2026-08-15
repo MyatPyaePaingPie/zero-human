@@ -33,7 +33,7 @@ class JudgeRequest(BaseModel):
     repo: str | None = Field(default=None, max_length=300, description="GitHub repo URL: README + manifests are read via the API (no clone) and merged into the input.")
     deck: str | None = Field(default=None, max_length=500, description="Deck: PDF URL or public Google Slides link (exported as PDF); slide text is merged into the input.")
     claim: str | None = Field(default=None, max_length=500, description="Single binary claim (shorthand for claims=[claim]).")
-    claims: list[str] = Field(default_factory=list, max_length=12, description="Rubric: several binary claims judged together.")
+    claims: list[str] = Field(default_factory=list, max_length=64, description="Rubric: several binary claims judged together.")
     human_question: str | None = Field(default=None, max_length=300, description="Free-text question shown to humans; defaults to the claim(s).")
     sku: Literal["reality_check", "demand_check", "verified_autonomous", "full_reality_check", "custom"] = "reality_check"
     extra_claims: list[str] = Field(default_factory=list, max_length=8, description="full_reality_check: the team's own autonomy claims, appended after the preset lenses.")

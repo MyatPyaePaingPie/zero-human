@@ -291,11 +291,14 @@ def _notify(job_id: str) -> None:
     if not phone or (job["state"] or {}).get("notified"):
         return
     if str(job.get("buyer_id", "")).startswith("text:"):
-        # text-intake threads get the composed result text from textflow.on_report_ready and the
-        # humans line from textflow.on_humans_ready, not the generic verdict line
+        # text-intake threads: the final text only goes out with human answers in it; a timeout
+        # settle sends a status line instead (never a model-only report to a paying person)
         try:
             from reality_check import textflow
-            textflow.on_humans_ready(job_id)
+            if store.human_answers(job_id):
+                textflow.on_humans_ready(job_id)
+            else:
+                textflow.on_humans_timeout(job_id)
         except Exception as exc:  # pragma: no cover
             store.event(job_id, "text.error", {"error": str(exc)[:200]})
         return
