@@ -123,6 +123,8 @@ def rate_page(job_id: str, request: Request, response: Response, src: str = "loc
     job = store.get_job(job_id)
     if not job:
         raise HTTPException(404, "no such job")
+    if job["status"] not in ("awaiting_humans", "settled"):
+        return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:18px system-ui;margin:3rem'>This check has not started yet. Come back in a minute.</p>", status_code=409)
     # venue NAT: every phone shares one IP, so anonymous respondents get a uuid, never the client
     # IP. The uuid sticks in a cookie so the same phone keeps one identity across jobs: that is
     # what makes "fresh eyes" on a before/after enforceable for in-room raters too.
@@ -160,8 +162,11 @@ textarea{{width:100%;min-height:5rem;font:inherit;padding:.6rem}}</style>
 
 @app.post("/rate/{job_id}")
 async def rate_submit(job_id: str, request: Request):
-    if not store.get_job(job_id):
+    j0 = store.get_job(job_id)
+    if not j0:
         raise HTTPException(404, "no such job")
+    if j0["status"] not in ("awaiting_humans", "settled"):
+        raise HTTPException(409, "this check has not started yet")
     form = await request.form()
     src = str(form.get("src", "local"))
     respondent = str(form.get("respondent", "")) or uuid.uuid4().hex[:12]

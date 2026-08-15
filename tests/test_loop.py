@@ -196,3 +196,9 @@ def test_anonymous_rater_gets_sticky_identity():
     b = cc.post("/judge", json={"input": "v2", "claim": "It is clear", "sku": "reality_check", "before_job_id": a["job_id"]}, headers={"X-RC-Paid": "8"}).json()
     p2 = cc.get(f"/rate/{b['job_id']}").text; r2 = re.search(r'name=respondent value="([0-9a-f]{12})"', p2).group(1)
     assert r1 == r2  # same phone, same identity across jobs
+
+
+def test_rating_closed_until_job_starts():
+    o = c.post("/order", json={"input": "x", "claim": "y"}).json()
+    assert c.get(f"/rate/{o['job_id']}").status_code == 409
+    assert c.post(f"/rate/{o['job_id']}", data={"c0": "yes", "n_claims": "1"}).status_code == 409
