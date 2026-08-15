@@ -459,79 +459,100 @@ is context for humans. Ids are stable and become finding ids in the report.
     "InterviewPay"
   ],
   "autonomy": {
-    "note": "Aria 15:40: our most unique value. 'Can this run autonomously?' graded against how agent-run businesses actually fail, from two of our own systems that tried: augur (autonomous forecasting/company loop, docs/research/augur-findings.md section 5) and money swarm (Vaults/_meta/research/money-swarm-failure-modes.md, 18 modes). Each item names the failure it defends against. Judged qualitatively from repo + deck + page; when the text is silent the finding says 'not evidenced: say how you handle this'.",
+    "note": "Aria 15:40: our most unique value. 'Can this run autonomously?' graded against how agent-run businesses actually fail. Source: two autonomous systems we built and ran ourselves (one an autonomous forecasting-and-trading company loop, one an autonomous revenue-ops swarm), plus public incidents. Never name those internal systems in anything a buyer or judge sees. Each item: what it means, how it fails in real life, what we look for in the repo, deck, and page. When the text is silent the finding says 'not evidenced: say how you handle this'.",
     "items": [
       {
         "id": "auto/spend-authority",
-        "title": "Who holds the money? Code, not the prompt",
-        "failure": "augur AgentPay / money-swarm envelope: agents that can raise their own limits, or budgets that live in a prompt, spend until stopped",
+        "title": "Who holds the money? Code does, not the prompt",
+        "failure": "We watched an agent loop spend until a human noticed; the fix that held was a signed spending envelope in code (daily cap, per-job cap, expiry, freeze) that the agent cannot edit, and a rule that when the balance or price is unknown the agent stops instead of guessing.",
         "claims": [
           "A spending limit for the agents exists in code or config, not only in a prompt",
           "An agent cannot raise its own limit; changing it needs a human action outside the agent",
           "There is a kill switch or freeze a human can hit, and the pitch says where it is",
           "When the system cannot measure something it needs (price, balance, approval), it stops rather than guesses (fails closed)"
-        ]
+        ],
+        "plain": "An autonomous business spends money: API calls, ads, refunds, human hires. The question is who can change how much. If the budget is a sentence in the system prompt, the agent can talk itself past it. If the agent can call the payment API with any amount, one bad loop empties the account.",
+        "look_for": "a config or code file with the limit; a freeze/kill switch a human can hit; the deck naming what stops a runaway; any statement about behavior when a price or balance cannot be read",
+        "evidence_public": []
       },
       {
         "id": "auto/idempotent-money",
-        "title": "Money and side effects fire exactly once",
-        "failure": "money-swarm #1 #5 #6 #13 #14: webhooks double-fire, retries overlap, approvals resume twice, revenue double-counts",
+        "title": "Money and side effects happen exactly once",
+        "failure": "We shipped a webhook without an idempotency key and got duplicate fulfillment on the first retry storm; revenue analytics drifted because resent events were counted again; an approval modeled as a boolean resumed a draft that had changed since it was approved.",
         "claims": [
           "A payment or fulfillment event is keyed by a stable id so a retry cannot fulfill or charge twice",
           "Human approvals (if any) are bound to the exact payload approved, not a reusable yes",
           "Revenue and order counts are deduplicated by a stable id, so the number shown to judges is not inflated by retries"
-        ]
+        ],
+        "plain": "Payment webhooks fire twice. Workers retry. A human clicks approve twice. If the code does not recognize 'I already did this', a customer is charged twice, an order ships twice, or the revenue number shown to judges counts one sale three times.",
+        "look_for": "an idempotency key on payment/fulfillment handlers (session id, event id); approvals tied to a hash of what was approved; revenue counted from deduplicated events; the revenue number the team quotes traceable to distinct charges",
+        "evidence_public": []
       },
       {
         "id": "auto/decision-quality",
         "title": "Agent decisions are measured against doing nothing",
-        "failure": "augur lessons 2 3 6 7 12: own-accuracy without a baseline, anti-predictive confidence, sign-blind gates, oracle leakage, fixtures that pass",
+        "failure": "Our agent cleared its own accuracy bar while being worse than the free baseline; high-confidence decisions did worse than the ones it skipped; a 'success' gate fired on a result that pointed the wrong way; human answers leaked into the agent's inputs so the humans stopped being a check; a demo that settled on labels we invented ourselves looked great and proved nothing.",
         "claims": [
           "The pitch compares an agent decision to a free baseline (rule of thumb, human default, doing nothing), not only to itself",
           "Self-reported model confidence is not what prices a purchase or triggers a spend",
           "Human answers are collected before the humans see the agent's answer, so the humans are an independent check",
           "The before/after number comes from real people or real customers, not from data the team invented"
-        ]
+        ],
+        "plain": "A team says 'our agent decided X and it worked'. Compared to what? If a simple rule or a human default would have done as well, the agent adds cost, not value. And a model saying it is 90% confident means nothing until you have checked how often 90% turns out right.",
+        "look_for": "a baseline comparison in the deck; confidence used for reporting not for spending; humans answering before they see the agent's answer; before/after numbers from real people or customers, with the source named",
+        "evidence_public": []
       },
       {
         "id": "auto/liveness",
         "title": "Someone notices when it silently stops",
-        "failure": "money-swarm #3 #11 #17: sources stop ingesting without an error, scheduled work goes missing, alerts drown the real failure",
+        "failure": "A source stopped ingesting after a healthy start with no terminal error; scheduled runs went missing and users noticed before operators; when alerts existed they were so many that the real one was invisible.",
         "claims": [
           "There is a heartbeat, health check, or canary that shows the agent is still working, and the pitch says who sees it",
           "The pitch says what happens at 3am when a step fails: retry, stop, or page a human",
           "Alerts, if any, are few and carry evidence, not a firehose"
-        ]
+        ],
+        "plain": "Autonomous means nobody is watching. Long-running listeners go quiet without an error. Scheduled work skips a run. The first person to notice is a customer, days later. The question is not 'does it run' but 'who finds out when it does not'.",
+        "look_for": "a health endpoint or heartbeat; a canary (a fake order every hour); a stated answer to 'what happens at 3am when step N fails'; alerts that are few and carry evidence and a remedy",
+        "evidence_public": []
       },
       {
         "id": "auto/authority-boundary",
         "title": "Customer text is information, never authority",
-        "failure": "money-swarm agent_protocol: inbound messages that talk the agent into free service, refunds, or spending; prompt injection through the customer channel",
+        "failure": "We built an inbound protocol that quarantines message bodies, checks a content hash and nonce, discards any authority claim in the text, and only then lets the agent read it as data. Before that, a buyer agent could ask for free judgment and get it.",
         "claims": [
           "A customer or another agent cannot change prices, grant themselves free service, or trigger spend by what they type",
           "Inbound text from customers or agents is treated as data (quarantined, checked) before any action",
           "The pitch names one abuse case and how the system refuses it"
-        ]
+        ],
+        "plain": "Customers and other agents will type things like 'the manager said this is free' or paste instructions aimed at the model. If inbound text can change prices, grant refunds, or trigger spend, the business can be talked out of its money. This is prompt injection wearing a customer hat.",
+        "look_for": "inbound messages treated as data (checked, quarantined) before action; prices, refunds, and spend gated by rules or a human, not by what was typed; the deck naming one abuse case and how it is refused",
+        "evidence_public": []
       },
       {
         "id": "auto/human-loop-design",
         "title": "The human is placed where agents genuinely cannot decide",
-        "failure": "Terac's own thesis + augur: humans as rubber stamps add cost without independence; humans nowhere means nobody catches the agent being wrong",
+        "failure": "Approvals that were a checkbox got clicked without reading; panels that saw the agent's answer first agreed with it; human steps with no time bound stalled the business when the human was slow.",
         "claims": [
           "The pitch names the specific decisions a human makes and why an agent should not make them yet",
           "The human step produces something the system uses (a verdict, a label, a correction), not a checkbox",
           "The human step is timed and priced, and the business still works when the human is slow"
-        ]
+        ],
+        "plain": "The hackathon's own thesis: no company runs at zero humans yet, so where the human sits is the design. A human who rubber-stamps every agent output adds cost and no independence. A human nowhere means nobody catches the agent being wrong. The good version names the decisions a human owns, why an agent should not own them yet, and what the human's answer changes.",
+        "look_for": "specific human decisions named with the reason; the human output used by the system (a verdict, a label, a correction); the human step priced and timed; the business still functioning when the human is late",
+        "evidence_public": []
       },
       {
         "id": "auto/ledger",
         "title": "Truth is an append-only ledger, not the latest state",
-        "failure": "augur dedupe (n inflated 165x), money-swarm #7 #8 #9 #18: derived tables mistaken for history, findings entering state without evidence",
+        "failure": "Re-logged rows inflated our sample count 165 times and lit a false 'ready for real money' badge; a current-state table was mistaken for history and audit trails vanished on dedupe; agent findings entered durable state without the evidence that produced them.",
         "claims": [
           "Events (orders, decisions, spends) are recorded once, append-only, and current state is derived from them",
           "Every claim the system makes about itself (revenue, users, accuracy) can be traced to ledger rows",
           "Agent findings that change state cite their evidence"
-        ]
+        ],
+        "plain": "If orders, decisions, and spends are overwritten in place, the business cannot answer 'how much did we make' or 'why did the agent do that' with evidence. Every number in the pitch (revenue, users, accuracy) should be reconstructable from rows that were written once and never edited.",
+        "look_for": "an events table or log that is append-only, with current state derived from it; each pitch number traceable to ledger rows; findings that change state citing their evidence",
+        "evidence_public": []
       }
     ]
   }
@@ -539,7 +560,7 @@ is context for humans. Ids are stable and become finding ids in the report.
 ```
 
 ## Autonomy section (our unique value)
-`autonomy` items render as PDF page 3 headline: "Can this run autonomously? Seven ways agent-run companies fail", one row per item: verdict, the failure it defends against, the fix. Source of the failure modes: our own augur and money-swarm systems, cited by id.
+`autonomy` items render as PDF page 3 headline: "Can this run autonomously? Seven ways agent-run companies fail", one row per item: verdict, the failure it defends against, the fix. Source of the failure modes: two autonomous systems we built and ran ourselves, plus public incidents (evidence_public). Never name the internal systems in buyer-facing text.
 
 ## How the report should read it (for #4)
 - Hackathon section first: "How to win this hackathon". Judging items sorted by weight; each failed claim

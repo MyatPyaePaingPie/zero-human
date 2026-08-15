@@ -18,5 +18,5 @@ Rules
 - PRs for larger or cross-seat changes. Long-term material under `docs/`, linked from the issue.
 - Anyone may override Aria on an issue when they have a better way; say so there.
 - Reuse before build: site-spec audit ids (`CodingVault/site-spec/packages/core/src/audit/audit.ts`)
-  and `handoff.json` shape; augur consensus/brier/bandit; money-swarm envelope/protocol/learning.
+  and `handoff.json` shape; our prior autonomous systems (consensus/brier/bandit; envelope/protocol/learning).
 - One deploy per wave (Render free tier wipes the DB). Terac launch ~17:00, after everything else.

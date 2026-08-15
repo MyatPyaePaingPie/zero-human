@@ -95,7 +95,7 @@ pre{background:var(--code);padding:20px 22px;overflow-x:auto;font:13px/1.55 ui-m
 
 <section class="page" data-page="PDF page 3 of 4">
 <h2>Can this run autonomously? Seven ways agent-run companies fail</h2>
-<p class="note">Graded against failure modes from two systems we built that tried to run on their own (augur, money swarm). This is the part nobody else in the room can tell you.</p>
+<p class="note">Graded against failure modes from two autonomous systems we built and ran ourselves, plus public incidents. This is the part nobody else in the room can tell you.</p>
 <div class="tw"><table><tr><th>Failure</th><th>Result</th><th>What we saw</th><th>Fix</th></tr>
 <tr><td><span class="id">auto/spend-authority</span><br><span class="note">who holds the money</span></td><td><span class="pill p-bad">fail</span></td><td>budget lives in the system prompt; agent can call Stripe with any amount</td><td>move the limit to config, add a freeze switch, fail closed when balance is unknown</td></tr>
 <tr><td><span class="id">auto/idempotent-money</span><br><span class="note">fires exactly once</span></td><td><span class="pill p-warn">not evidenced</span></td><td>webhook handler has no idempotency key in repo</td><td>key fulfillment by session id; dedupe revenue by event id</td></tr>

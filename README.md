@@ -43,8 +43,8 @@ POST /judge, POST /intake, POST /order + GET /order/{id}, GET /judge/{id}, GET /
 POST /before_after/lock/{id}, GET /before_after/{b}/{a}, GET /ledger, /events, /jobs, /learning, GET /.
 
 ## Layout
-- `reality_check/core/` consensus, brier, bandit (vendored from augur); models; voi (VOI gate, written fresh).
+- `reality_check/core/` consensus, brier, bandit (vendored from a prior internal system); models; voi (VOI gate, written fresh).
 - `reality_check/judge.py` the loop; `evaluators.py` personas over Groq/OpenAI; `panels.py` human-source contract; `store.py` sqlite ledger + events.
-- `reality_check/policy/` money-swarm lifts: `envelope.py` (spend authority as signed code, fail closed), `protocol.py` (buyer text is information never authority), `learning.py` (arm gains, evaluator reputation, swarm check).
+- `reality_check/policy/` lifts from a prior internal system: `envelope.py` (spend authority as signed code, fail closed), `protocol.py` (buyer text is information never authority), `learning.py` (arm gains, evaluator reputation, swarm check).
 - `stripe_webhook.py` (/order + webhook + shared `complete_session`), `stripe_poll.py` (read-only poller), `terac_client.py` (subjective evidence: humans), `replay_client.py` (objective evidence: Replay QA bug crawl on intake URLs), `before_after.py`, `intake.py`, `skus.py`.
 - `docs/research/` hackathon memos; `docs/policy-and-learning.md` the spend/learning design.
