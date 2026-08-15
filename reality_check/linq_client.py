@@ -102,7 +102,9 @@ def handle_inbound(event: dict[str, Any]) -> dict[str, Any]:
     store.event(None, "linq.enrolled", {"rater": rater_id(phone), "new": new})
     if new:
         send(phone, WELCOME)
-    return {"enrolled": rater_id(phone), "new": new}
+    from reality_check import textflow  # local: avoid a module-load cycle with judge/report
+    result = textflow.handle_text(phone, text)
+    return {"enrolled": rater_id(phone), "new": new, "textflow": result}
 
 
 # ---- panel ------------------------------------------------------------------------------------

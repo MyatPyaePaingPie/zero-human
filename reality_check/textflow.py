@@ -1,0 +1,254 @@
+"""Text intake (issue #23): the whole product in one iMessage thread. A human texts the Linq
+line with links (repo/slides/page, any subset) or a pitch; we ack immediately with no link
+(Linq sandbox rule: first outbound carries no link), grade in the background, and text back the
+result with the PDF + agent.md links once the hackathon rubric lands. RERUN re-fires the same
+links as a before/after pair; HUMANS surfaces the async human-panel line when it settles.
+
+Wired from ``linq_client.handle_inbound`` (see that module) after STOP handling and enrollment.
+Everything here fails closed and is safe to call more than once for the same job: the send
+functions gate on a state flag before texting.
+"""
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from reality_check import sources, store
+from reality_check.panels import PUBLIC_BASE
+
+ASK_LINE = "Send me a link to your repo, your slides, or your landing page. Any one works, all three is best."
+ACK_LINE = ("Got it. Reading your repo and page now. Grading it against today's rubric and the sponsor tracks. "
+            "Give me about two minutes.")
+RERUN_ACK_LINE = "Re-running on the same links..."
+NOT_IN_YET_LINE = "Not in yet. I'll text you as soon as the panel settles."
+CLOSING_LINE = "Reply RERUN after you fix things. Reply HUMANS to hear what 3 strangers said when it lands."
+
+_URL_RE = re.compile(r"https?://[^\s\)\]\"'<>]+")
+
+_HACKATHON_STAMP_LABELS = {
+    "contender": "CONTENDER",
+    "fixable_by_1830": "FIXABLE BY 18:30",
+    "not_yet": "NOT YET",
+    "not_run": "NOT RUN",
+}
+
+
+def parse_links(text: str) -> dict[str, Any]:
+    """Split a text message into repo/deck/url links (via ``sources.detect``) plus whatever
+    text is left over (the pitch). Any subset of link kinds may be present; only the first URL
+    of each kind is kept."""
+    text = text or ""
+    out: dict[str, str | None] = {"repo": None, "deck": None, "url": None}
+    remainder = text
+    for m in _URL_RE.finditer(text):
+        link = m.group(0)
+        kind = sources.detect(link)
+        if kind in ("repo", "deck", "page") and not out[{"page": "url"}.get(kind, kind)]:
+            out[{"page": "url"}.get(kind, kind)] = link
+        remainder = remainder.replace(link, " ")
+    return {**out, "pitch": " ".join(remainder.split())}
+
+
+def _has_link(links: dict) -> bool:
+    return bool(links.get("repo") or links.get("deck") or links.get("url"))
+
+
+def start_from_text(phone: str, text: str, *, before_job_id: str | None = None) -> dict:
+    """Create the job for this text: full_reality_check, free (voi_routed floor, $0 budget --
+    this product is free for the room today), buyer_id keyed off the rater identity so the same
+    phone keeps one identity across jobs. Records the phone->job mapping. No links are ever put
+    into a text sent from here -- only the job_id and the parsed links are returned to the
+    caller, which decides what (if anything) to say."""
+    from reality_check import judge, linq_client
+    from reality_check.core.models import JudgeRequest
+
+    links = parse_links(text)
+    req = JudgeRequest(
+        sku="full_reality_check",
+        evidence_standard="voi_routed",
+        max_budget_usd=0,
+        buyer_id=f"text:{linq_client.rater_id(phone)}",
+        notify_phone=phone,
+        repo=links["repo"],
+        deck=links["deck"],
+        url=links["url"],
+        input=links["pitch"] or "",
+        before_job_id=before_job_id,
+    )
+    v = judge.start(req)
+    store.text_thread_put(linq_client.rater_id(phone), v.job_id, links)
+    return {"job_id": v.job_id, "links": links}
+
+
+def handle_text(phone: str, text: str) -> dict:
+    """Router for everything that isn't STOP (the caller handles STOP before this runs)."""
+    from reality_check import linq_client
+
+    t = (text or "").strip()
+    first_word = t.split()[0].upper() if t.split() else ""
+    phone_hash = linq_client.rater_id(phone)
+
+    if first_word == "RERUN":
+        last = store.text_thread_last(phone_hash)
+        if not last:
+            linq_client.send(phone, ASK_LINE)
+            return {"action": "ask", "reason": "rerun_no_thread"}
+        links = last["links"]
+        reconstructed = " ".join(x for x in (links.get("repo"), links.get("deck"), links.get("url"), links.get("pitch")) if x)
+        result = start_from_text(phone, reconstructed, before_job_id=last["job_id"])
+        linq_client.send(phone, RERUN_ACK_LINE, job_id=result["job_id"])
+        return {"action": "rerun", "job_id": result["job_id"], "before_job_id": last["job_id"]}
+
+    if first_word == "HUMANS":
+        last = store.text_thread_last(phone_hash)
+        job_id = last["job_id"] if last else None
+        answers = store.human_answers(job_id) if job_id else []
+        if answers:
+            on_humans_ready(job_id)
+            return {"action": "humans", "job_id": job_id}
+        linq_client.send(phone, NOT_IN_YET_LINE, job_id=job_id)
+        return {"action": "humans_not_ready", "job_id": job_id}
+
+    links = parse_links(t)
+    if not _has_link(links):
+        linq_client.send(phone, ASK_LINE)
+        return {"action": "ask"}
+
+    result = start_from_text(phone, t)
+    linq_client.send(phone, ACK_LINE, job_id=result["job_id"])
+    return {"action": "started", "job_id": result["job_id"], "links": result["links"]}
+
+
+# ---- outbound: report + humans lines, called once the background work lands -----------------
+
+def _fmt_hackathon_stamp(stamp: str | None) -> str:
+    stamp = stamp or "not_run"
+    return _HACKATHON_STAMP_LABELS.get(stamp, stamp.replace("_", " ").upper())
+
+
+def _fmt_business_stamp(stamp: str | None) -> str:
+    return (stamp or "not_run").replace("_", " ").upper()
+
+
+def _project_name(job: dict) -> str:
+    src_list = ((job.get("state") or {}).get("sources") or {}).get("sources") or []
+    for s in src_list:
+        if s.get("kind") == "repo":
+            title = (s.get("meta") or {}).get("title") or ""
+            if title:
+                return title.rsplit("/", 1)[-1]
+    for s in src_list:
+        if s.get("kind") == "page":
+            title = (s.get("meta") or {}).get("title") or ""
+            if title:
+                return title[:60]
+    repo = (job.get("request") or {}).get("repo")
+    if repo:
+        return repo.rstrip("/").rsplit("/", 1)[-1]
+    return "Your project"
+
+
+def _delta_line(before_job_id: str, rep_after: dict) -> str | None:
+    from reality_check import report
+
+    try:
+        rep_before = report.build(before_job_id)
+    except KeyError:
+        return None
+    before_status = {f["id"]: f.get("status") for f in rep_before["findings"]}
+    after_status = {f["id"]: f.get("status") for f in rep_after["findings"]}
+    fixed = sum(1 for fid, st in after_status.items()
+                if fid in before_status and before_status[fid] != "pass" and st == "pass")
+    regressed = sum(1 for fid, st in after_status.items()
+                     if fid in before_status and before_status[fid] == "pass" and st != "pass")
+    new_stamp = _fmt_hackathon_stamp(rep_after["stamps"].get("hackathon"))
+    return f"fixed: {fixed}, regressed: {regressed}, new stamp {new_stamp}"
+
+
+def _compose_result(job: dict, rep: dict) -> str:
+    project = _project_name(job)
+    job_id = job["job_id"]
+    stamps = rep.get("stamps") or {}
+    autonomy = rep.get("autonomy")
+    autonomy_str = f"Autonomous {autonomy['k_hold']}/{autonomy['n']}" if autonomy else "Autonomous not run"
+    line1 = (f"{project}: Hackathon {_fmt_hackathon_stamp(stamps.get('hackathon'))} · {autonomy_str} · "
+             f"Business {_fmt_business_stamp(stamps.get('business'))}")
+
+    top3 = rep.get("top3") or []
+    fixes = " ".join(f"{i + 1}) {str(t)[:90]}" for i, t in enumerate(top3[:3]))
+    line2 = f"Do first: {fixes}" if fixes else ""
+
+    sponsors = ((rep.get("hackathon") or {}).get("sponsors")) or {}
+    qualifies = [e.get("name", "") for e in sponsors.get("qualifies", [])]
+    cheapest = [e.get("name", "") for e in sponsors.get("cheapest_to_add", [])]
+    sponsor_line = f"Sponsor tracks you qualify for: {', '.join(qualifies) if qualifies else 'none yet'}."
+    if cheapest:
+        sponsor_line += f" Cheapest to add: {cheapest[0]}."
+
+    pdf_url = f"{PUBLIC_BASE}/report/{job_id}.pdf"
+    agent_url = f"{PUBLIC_BASE}/report/{job_id}/agent.md"
+    line4 = f"Full report (PDF): {pdf_url}   For your coding agent: {agent_url}"
+
+    before_job_id = (job.get("request") or {}).get("before_job_id")
+    lines = [line1, line2, sponsor_line, line4, CLOSING_LINE]
+    if before_job_id:
+        delta = _delta_line(before_job_id, rep)
+        if delta:
+            lines.insert(0, delta)
+    return "\n".join(p for p in lines if p)
+
+
+def on_report_ready(job_id: str) -> None:
+    """Call once the hackathon rubric has landed on state.hackathon (judge.py's background
+    thread fires ``hackathon.done``). Safe to call multiple times or on a job with no text
+    thread: no-op unless notify_phone is set, the hackathon section exists, and it hasn't
+    already been sent."""
+    from reality_check import linq_client, report
+
+    job = store.get_job(job_id)
+    if not job:
+        return
+    phone = (job.get("request") or {}).get("notify_phone")
+    if not phone:
+        return
+    st = job.get("state") or {}
+    if st.get("hackathon") is None:
+        return
+    if st.get("text_result_sent"):
+        return
+    rep = report.build(job_id)
+    text = _compose_result(job, rep)
+    linq_client.send(phone, text, job_id=job_id)
+    store.patch_job_state(job_id, "text_result_sent", True)
+    store.event(job_id, "text.result_sent", {})
+
+
+def on_humans_ready(job_id: str) -> None:
+    """Call once the human panel (Terac or local page) has settled answers. Safe to call
+    multiple times or with no notify_phone / no answers yet: no-op."""
+    from reality_check import linq_client
+
+    job = store.get_job(job_id)
+    if not job:
+        return
+    phone = (job.get("request") or {}).get("notify_phone")
+    if not phone:
+        return
+    st = job.get("state") or {}
+    if st.get("text_humans_sent"):
+        return
+    answers = store.human_answers(job_id)
+    if not answers:
+        return
+    n = len(answers)
+    claim0 = [a for a in answers if a.get("claim_idx") == 0]
+    pool = claim0 or answers
+    yes0 = sum(1 for a in pool if a.get("answer_yes"))
+    quotes = [a["free_text"].strip()[:80] for a in answers if (a.get("free_text") or "").strip()][:2]
+    text = f"{n} strangers read your pitch: {yes0} of {len(pool)} could say what it does."
+    if quotes:
+        text += " " + " ".join(f'"{q}"' for q in quotes)
+    text += " Details in the PDF."
+    linq_client.send(phone, text, job_id=job_id)
+    store.patch_job_state(job_id, "text_humans_sent", True)
+    store.event(job_id, "text.humans_sent", {})

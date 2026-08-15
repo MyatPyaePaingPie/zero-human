@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS payment_claims (
 CREATE TABLE IF NOT EXISTS raters (
   phone TEXT PRIMARY KEY, opted_out INTEGER NOT NULL DEFAULT 0, joined_at TEXT NOT NULL, last_sent_at TEXT
 );
+CREATE TABLE IF NOT EXISTS text_threads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, phone_hash TEXT NOT NULL, job_id TEXT NOT NULL,
+  links_json TEXT NOT NULL, created_at TEXT NOT NULL
+);
 """
 
 
@@ -168,6 +172,26 @@ def ledger_totals() -> dict:
     rev = t.get("revenue", {}).get("usd", 0.0)
     cost = sum(v["usd"] for k, v in t.items() if k.startswith("cost"))
     return {"by_kind": t, "revenue_usd": rev, "cost_usd": cost, "margin_usd": rev - cost}
+
+
+def text_thread_put(phone_hash: str, job_id: str, links: dict) -> None:
+    """One row per text-intake job for this phone (issue #23); `text_thread_last` reads the
+    newest. Never upserts: RERUN needs the prior row's job_id/links still intact when the new
+    row lands."""
+    with _lock, conn() as c:
+        c.execute("INSERT INTO text_threads(phone_hash,job_id,links_json,created_at) VALUES(?,?,?,?)",
+                  (phone_hash, job_id, json.dumps(links), now()))
+
+
+def text_thread_last(phone_hash: str) -> dict | None:
+    with conn() as c:
+        r = c.execute(
+            "SELECT job_id, links_json, created_at FROM text_threads WHERE phone_hash=? ORDER BY id DESC LIMIT 1",
+            (phone_hash,),
+        ).fetchone()
+    if not r:
+        return None
+    return {"job_id": r["job_id"], "links": json.loads(r["links_json"]), "created_at": r["created_at"]}
 
 
 def event(job_id: str | None, kind: str, payload: dict | None = None) -> None:

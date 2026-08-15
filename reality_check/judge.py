@@ -191,6 +191,11 @@ def _launch_hackathon(job_id: str, text: str, has_repo: bool) -> None:
             res = {"error": str(exc)[:200], "stamp": "not_yet", "warnings": ["hackathon evaluation failed"]}
         store.patch_job_state(job_id, "hackathon", res)
         store.event(job_id, "hackathon.done", {"stamp": res.get("stamp"), "model_calls": res.get("model_calls"), "warnings": res.get("warnings", [])})
+        try:
+            from reality_check import textflow
+            textflow.on_report_ready(job_id)   # text-intake buyers get the result text now (no-op otherwise)
+        except Exception as exc:  # pragma: no cover
+            store.event(job_id, "text.error", {"error": str(exc)[:200]})
     threading.Thread(target=_work, daemon=True).start()
 
 
@@ -284,6 +289,15 @@ def _notify(job_id: str) -> None:
     job = store.get_job(job_id)
     phone = (job or {}).get("request", {}).get("notify_phone")
     if not phone or (job["state"] or {}).get("notified"):
+        return
+    if str(job.get("buyer_id", "")).startswith("text:"):
+        # text-intake threads get the composed result text from textflow.on_report_ready and the
+        # humans line from textflow.on_humans_ready, not the generic verdict line
+        try:
+            from reality_check import textflow
+            textflow.on_humans_ready(job_id)
+        except Exception as exc:  # pragma: no cover
+            store.event(job_id, "text.error", {"error": str(exc)[:200]})
         return
     v = verdict(job_id)
     linq_client.notify_verdict(job_id, phone, f"{v.verdict} (p={v.p:.2f}, {v.n_humans} humans). {v.summary[:120]}")
