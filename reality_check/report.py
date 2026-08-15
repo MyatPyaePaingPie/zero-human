@@ -59,7 +59,7 @@ def _business_finding(cv) -> dict[str, Any]:
     if status == "unknown":
         fix = "no evidence yet: give a live URL"
     else:
-        fix = f"Say or show it: {cv.claim}"
+        fix = f"Make it true and put it where a stranger sees it in ten seconds (hero, first slide, README top): {cv.claim}"
 
     if probe_backed:
         failing = (cv.objective or {}).get("failing") or []
@@ -294,10 +294,12 @@ def _finding_md(f: dict) -> str:
         done_when = f"{acc.get('claim')} reaches status = pass on re-run."
     else:
         done_when = f"{acc.get('claim')} reaches p >= 0.7 on re-run." if acc else "re-run and check."
-    return (f"### {f['id']} [{f['status']}]\n"
-            f"Evidence: {observed}\n"
-            f"Fix: {f['fix']}\n"
-            f"Done when: {done_when}\n")
+    # a person talking to a team: the action first, the evidence, the finish line; the id last and small
+    status_word = {"pass": "holds", "fail": "missing", "partial": "half there", "unknown": "no evidence yet"}.get(f["status"], f["status"])
+    return (f"### {f['fix']}\n"
+            f"What we saw ({status_word}): {observed}\n"
+            f"Done when: {done_when}\n"
+            f"<sub>{f['id']}</sub>\n")
 
 
 def to_agent_md(report: dict) -> str:

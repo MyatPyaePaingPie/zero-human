@@ -121,7 +121,7 @@ def _claim_rows(claims: list[str], results: list[list]) -> list[dict]:
 
 def _why_fix(rows: list[dict]) -> tuple[str, str]:
     if not rows:
-        return "weakest: no model answer", "Say or show it: (no claim judged)"
+        return "weakest: no model answer", "No claim was judged; re-run."
     weakest = min(rows, key=lambda r: r["p"])
     return (f"weakest: {weakest['text']}",
             f"Make this visibly true and state it where a judge looks first (hero line, slide 1 or 2, "

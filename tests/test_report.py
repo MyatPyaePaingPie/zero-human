@@ -250,7 +250,7 @@ def test_agent_md_autonomy_section_present():
     rep = report.build(jid)
     md = report.to_agent_md(rep)
     assert "## Can it run autonomously" in md
-    assert "### auto/spend-authority [fail]" in md
+    assert "<sub>auto/spend-authority</sub>" in md and "What we saw (missing)" in md
 
 
 def test_evidence_public_line_only_under_failed_or_partial_items():
