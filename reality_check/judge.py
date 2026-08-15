@@ -180,7 +180,7 @@ def _resolve_sources(req: JudgeRequest, *, force: bool = False) -> dict | None:
     return {"source_kinds": norm.get("source_kinds", []), "primary_kind": norm.get("primary_kind"),
             "live_url": norm.get("live_url"), "warnings": norm.get("warnings", []),
             "sources": [{k: v for k, v in s.items() if k != "text"} | {"chars": len(s.get("text") or ""),
-                        "first_screen": _first_screen(s), "link": s.get("live_url") or s.get("ref") or ""}
+                        "first_screen": _first_screen(s), "link": s.get("ref") if s.get("kind") != "pitch" else ""}
                         for s in norm.get("sources", [])]}
 
 
