@@ -13,7 +13,7 @@ It is not an ops console, a replacement verdict page, or a second backend.
 
 ## Current status verified on 2026-08-15
 
-- The backend is live at `https://reality-check-0f80.onrender.com` and `GET /summary` returns real
+- The backend is live at `https://reality-check-qhy9.onrender.com` and `GET /summary` returns real
   JSON with CORS enabled.
 - The two public products are configured at $8 and $25 with live Stripe Payment Links.
 - The live snapshot contained 18 jobs: 17 settled and one evaluating. It showed no human answers,
@@ -66,7 +66,7 @@ decisions, learning, and recent checks from the live backend.
 This is a view layer only over an existing backend.
 
 - Build a responsive React frontend using the project's normal Lovable stack and Tailwind.
-- Use browser `fetch` directly against `https://reality-check-0f80.onrender.com`.
+- Use browser `fetch` directly against `https://reality-check-qhy9.onrender.com`.
 - Do not create or connect Lovable Cloud, Supabase, a database, auth, storage, server functions, edge
   functions, API proxies, secrets, or a new backend.
 - Do not build or embed checkout. Payment happens only at the `pay_url` returned by `POST /order`,
@@ -243,7 +243,7 @@ Recent checks is a semantic table, never cards. Columns:
 - Evidence cost
 
 Each row links to
-`https://reality-check-0f80.onrender.com/verdict/{job_id}` in a new tab with
+`https://reality-check-qhy9.onrender.com/verdict/{job_id}` in a new tab with
 `rel="noopener noreferrer"`.
 
 On mobile, keep it a real table inside a clearly scrollable horizontal region. Do not transform rows
@@ -263,7 +263,7 @@ Right: `Terac for humans · Stripe for payments · Replay QA for objective check
 
 Base URL:
 
-`https://reality-check-0f80.onrender.com`
+`https://reality-check-qhy9.onrender.com`
 
 Use only these endpoints:
 
@@ -380,7 +380,7 @@ Do not open a modal. Keep the entire flow in the hero composer.
 5. Use `history.replaceState` to add `?job=<job_id>` to the storefront URL. Do not put the submitted
    content in the URL or storage.
 6. Show `Order <first 8 job characters> created`, the backend status, and a visible result URL:
-   `https://reality-check-0f80.onrender.com/verdict/{job_id}`.
+   `https://reality-check-qhy9.onrender.com/verdict/{job_id}`.
 7. Provide a `Copy result link` button in every order state.
 8. Only while `status` is `pending_payment`, show a primary `Continue to secure payment` button. It
    uses `window.location.assign(pay_url)` in the same tab. Never embed Stripe.

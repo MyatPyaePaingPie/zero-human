@@ -32,4 +32,4 @@ goes under `docs/` (specs in `docs/specs/`) and is linked from the issue. Skill:
 ## Ops
 - Tests: `.venv/bin/pytest -q` (green before every push). Keys: keychain, service == var name; never in tree.
 - Render free tier wipes the DB on deploy: one deploy per wave, sweep re-run after. Skill: `wave-deploy`.
-- Live: https://reality-check-0f80.onrender.com. Plan: `_meta/plans/2026-08-15-issue-queue-dag.md`.
+- Live: https://reality-check-qhy9.onrender.com. Plan: `_meta/plans/2026-08-15-issue-queue-dag.md`.
