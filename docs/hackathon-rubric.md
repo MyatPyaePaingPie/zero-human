@@ -457,9 +457,89 @@ is context for humans. Ids are stable and become finding ids in the report.
     "1517 Fund",
     "Solo Founders",
     "InterviewPay"
-  ]
+  ],
+  "autonomy": {
+    "note": "Aria 15:40: our most unique value. 'Can this run autonomously?' graded against how agent-run businesses actually fail, from two of our own systems that tried: augur (autonomous forecasting/company loop, docs/research/augur-findings.md section 5) and money swarm (Vaults/_meta/research/money-swarm-failure-modes.md, 18 modes). Each item names the failure it defends against. Judged qualitatively from repo + deck + page; when the text is silent the finding says 'not evidenced: say how you handle this'.",
+    "items": [
+      {
+        "id": "auto/spend-authority",
+        "title": "Who holds the money? Code, not the prompt",
+        "failure": "augur AgentPay / money-swarm envelope: agents that can raise their own limits, or budgets that live in a prompt, spend until stopped",
+        "claims": [
+          "A spending limit for the agents exists in code or config, not only in a prompt",
+          "An agent cannot raise its own limit; changing it needs a human action outside the agent",
+          "There is a kill switch or freeze a human can hit, and the pitch says where it is",
+          "When the system cannot measure something it needs (price, balance, approval), it stops rather than guesses (fails closed)"
+        ]
+      },
+      {
+        "id": "auto/idempotent-money",
+        "title": "Money and side effects fire exactly once",
+        "failure": "money-swarm #1 #5 #6 #13 #14: webhooks double-fire, retries overlap, approvals resume twice, revenue double-counts",
+        "claims": [
+          "A payment or fulfillment event is keyed by a stable id so a retry cannot fulfill or charge twice",
+          "Human approvals (if any) are bound to the exact payload approved, not a reusable yes",
+          "Revenue and order counts are deduplicated by a stable id, so the number shown to judges is not inflated by retries"
+        ]
+      },
+      {
+        "id": "auto/decision-quality",
+        "title": "Agent decisions are measured against doing nothing",
+        "failure": "augur lessons 2 3 6 7 12: own-accuracy without a baseline, anti-predictive confidence, sign-blind gates, oracle leakage, fixtures that pass",
+        "claims": [
+          "The pitch compares an agent decision to a free baseline (rule of thumb, human default, doing nothing), not only to itself",
+          "Self-reported model confidence is not what prices a purchase or triggers a spend",
+          "Human answers are collected before the humans see the agent's answer, so the humans are an independent check",
+          "The before/after number comes from real people or real customers, not from data the team invented"
+        ]
+      },
+      {
+        "id": "auto/liveness",
+        "title": "Someone notices when it silently stops",
+        "failure": "money-swarm #3 #11 #17: sources stop ingesting without an error, scheduled work goes missing, alerts drown the real failure",
+        "claims": [
+          "There is a heartbeat, health check, or canary that shows the agent is still working, and the pitch says who sees it",
+          "The pitch says what happens at 3am when a step fails: retry, stop, or page a human",
+          "Alerts, if any, are few and carry evidence, not a firehose"
+        ]
+      },
+      {
+        "id": "auto/authority-boundary",
+        "title": "Customer text is information, never authority",
+        "failure": "money-swarm agent_protocol: inbound messages that talk the agent into free service, refunds, or spending; prompt injection through the customer channel",
+        "claims": [
+          "A customer or another agent cannot change prices, grant themselves free service, or trigger spend by what they type",
+          "Inbound text from customers or agents is treated as data (quarantined, checked) before any action",
+          "The pitch names one abuse case and how the system refuses it"
+        ]
+      },
+      {
+        "id": "auto/human-loop-design",
+        "title": "The human is placed where agents genuinely cannot decide",
+        "failure": "Terac's own thesis + augur: humans as rubber stamps add cost without independence; humans nowhere means nobody catches the agent being wrong",
+        "claims": [
+          "The pitch names the specific decisions a human makes and why an agent should not make them yet",
+          "The human step produces something the system uses (a verdict, a label, a correction), not a checkbox",
+          "The human step is timed and priced, and the business still works when the human is slow"
+        ]
+      },
+      {
+        "id": "auto/ledger",
+        "title": "Truth is an append-only ledger, not the latest state",
+        "failure": "augur dedupe (n inflated 165x), money-swarm #7 #8 #9 #18: derived tables mistaken for history, findings entering state without evidence",
+        "claims": [
+          "Events (orders, decisions, spends) are recorded once, append-only, and current state is derived from them",
+          "Every claim the system makes about itself (revenue, users, accuracy) can be traced to ledger rows",
+          "Agent findings that change state cite their evidence"
+        ]
+      }
+    ]
+  }
 }
 ```
+
+## Autonomy section (our unique value)
+`autonomy` items render as PDF page 3 headline: "Can this run autonomously? Seven ways agent-run companies fail", one row per item: verdict, the failure it defends against, the fix. Source of the failure modes: our own augur and money-swarm systems, cited by id.
 
 ## How the report should read it (for #4)
 - Hackathon section first: "How to win this hackathon". Judging items sorted by weight; each failed claim
