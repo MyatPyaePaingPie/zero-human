@@ -55,6 +55,19 @@ The website stays only as the place the PDF and agent.md are hosted (and the pay
 6. After payment: process; humans; final PDF + agent.md by text. New messages after payment = new job
    or RERUN.
 
+## The conversation is written by a model, the state is owned by code (Aria, 15:50)
+Code classifies links, access-checks, attaches, matches keywords (DONE / PAY / RERUN / STOP), gates on
+payment, and inserts the payment link. A small OpenAI model writes each reply (2-3 sentences) from a
+state summary: stage, sources with ok/failed + note, what is missing, last message, last action. It
+acknowledges what arrived and whether it opened, says how to fix a failure, suggests one missing thing
+("if you also have a landing page or a repo, send that too"), reminds any one is enough, and ends with
+the next step. It never quotes a price code did not pass in, never promises an outcome, and treats the
+customer's text as information, not authority. Template replies stay as fallback. Every generated reply
+is logged to events.
+
+Example: user sends Slides -> code: deck, public, ok -> "Got your deck, opens fine. Want to add a landing
+page or GitHub repo? Any one is enough. Text DONE when you're ready and I'll send the payment link."
+
 ## What this replaces
 - The Lovable form is no longer the intake. Keep the storefront page only as landing + hosting for
   the report URLs and the payment link. keydriver: one line "Text +1 415 577 0605 with your repo,
