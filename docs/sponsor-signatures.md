@@ -124,9 +124,10 @@ negative evidence and quoted when they fire.
     "id": "before_after",
     "what": "before/after delta shown",
     "signals": [
-     "before",
-     "after",
-     "delta"
+     "before_after",
+     "before/after",
+     "fixed_since",
+     "delta shown"
     ]
    }
   ]
@@ -198,9 +199,9 @@ negative evidence and quoted when they fire.
     "id": "idempotent",
     "what": "idempotent on session/event id",
     "signals": [
-     "idempot",
-     "session_id",
-     "event.id"
+     "idempoten",
+     "Idempotency-Key",
+     "session_id"
     ]
    },
    {
@@ -214,8 +215,9 @@ negative evidence and quoted when they fire.
     "id": "revenue_shown",
     "what": "revenue number surfaced",
     "signals": [
-     "revenue",
-     "ledger"
+     "revenue_usd",
+     "revenue today",
+     "/ledger"
     ]
    }
   ]
@@ -300,7 +302,9 @@ negative evidence and quoted when they fire.
     "id": "typing",
     "what": "typing indicator",
     "signals": [
-     "typing"
+     "typing_indicator",
+     "typing indicator",
+     "typing:"
     ]
    },
    {
@@ -325,7 +329,8 @@ negative evidence and quoted when they fire.
     "id": "group",
     "what": "group chat / multiplayer",
     "signals": [
-     "group",
+     "group chat",
+     "group thread",
      "participants"
     ]
    }
@@ -375,22 +380,28 @@ negative evidence and quoted when they fire.
     "id": "poll",
     "what": "status polled / bugs fetched",
     "signals": [
-     "bug",
-     "status"
+     "bug_reports",
+     "bugs found",
+     "/status"
     ]
    },
    {
     "id": "fixed",
     "what": "bugs fixed in repo",
     "signals": [
-     "fix"
+     "fixed the bug",
+     "bugs fixed",
+     "fix(",
+     "fixes from Replay"
     ]
    },
    {
     "id": "clean_rerun",
     "what": "clean report on re-run",
     "signals": [
-     "clean"
+     "clean report",
+     "0 bugs",
+     "zero bugs"
     ]
    },
    {
@@ -470,8 +481,9 @@ negative evidence and quoted when they fire.
     "id": "preview",
     "what": "preview URL / browser use",
     "signals": [
-     "preview",
-     "browser"
+     "preview_url",
+     "previewUrl",
+     "browser use"
     ]
    }
   ]
@@ -609,7 +621,8 @@ negative evidence and quoted when they fire.
     "what": "@mention handoff",
     "signals": [
      "band_send_message",
-     "@"
+     "@mention",
+     "mention"
     ]
    },
    {
@@ -624,8 +637,9 @@ negative evidence and quoted when they fire.
     "id": "boundary",
     "what": "enforced boundary between accounts / contacts",
     "signals": [
-     "contact",
-     "permission"
+     "contacts",
+     "bilateral",
+     "permission boundary"
     ]
    },
    {
@@ -633,8 +647,8 @@ negative evidence and quoted when they fire.
     "what": "critic can block a verdict",
     "signals": [
      "veto",
-     "block",
-     "critic"
+     "can block",
+     "critic agent"
     ]
    },
    {
@@ -707,15 +721,17 @@ negative evidence and quoted when they fire.
     "what": "Render Workflows service with chained tasks (TRACK RULE)",
     "signals": [
      "workflow",
-     "Workflows"
+     "Workflows",
+     "tasks:"
     ]
    },
    {
     "id": "triggered",
     "what": "workflow triggered via SDK/REST/CLI",
     "signals": [
-     "trigger",
-     "task run"
+     "workflow run",
+     "task run",
+     "triggered the workflow"
     ]
    }
   ]
@@ -755,7 +771,8 @@ negative evidence and quoted when they fire.
     "signals": [
      "fetch(",
      "axios",
-     "buy.stripe.com"
+     "buy.stripe.com",
+     "onrender.com"
     ]
    }
   ]
@@ -799,8 +816,8 @@ negative evidence and quoted when they fire.
     "id": "sold",
     "what": "used to sell",
     "signals": [
-     "price",
-     "product"
+     "checkout",
+     "product_id"
     ]
    }
   ]
@@ -811,7 +828,8 @@ negative evidence and quoted when they fire.
   "2": "wired: key/import/config present, no call site",
   "3": "used: at least one capability with a real call site",
   "4": "deep: >= half of the capabilities, incl. the track's required one",
-  "report": "per sponsor: depth level word, capabilities used k of n with the list ticked, next capability to add (first unticked, with cheapest_honest_add doc), and quotes for the fake_tells that fired"
+  "report": "per sponsor: depth level word, capabilities used k of n with the list ticked, next capability to add (first unticked, with cheapest_honest_add doc), and quotes for the fake_tells that fired",
+  "signal_rules": "A capability hits only when a signal matches in CODE or CONFIG files (not README/deck prose) OR the signal is a multi-word phrase; single common words never count. Terac 'before/after' and Replay 'fixed' need a multi-word phrase."
  }
 }
 ```
