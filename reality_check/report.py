@@ -10,6 +10,8 @@ one_gap_away (exactly one gap has a fail) / not_yet.
 """
 from __future__ import annotations
 
+import pathlib
+
 import html
 import re
 from typing import Any
@@ -563,7 +565,29 @@ def _repo_advice(findings: list[dict]) -> str:
             f'<ul>{items}</ul></section>')
 
 
-def to_html(report: dict) -> str:
+_TEMPLATE_V2 = pathlib.Path(__file__).resolve().parents[1] / "docs" / "specs" / "report-template-v2.html"
+
+
+def to_html_v2(report: dict) -> str | None:
+    """The report design (docs/specs/report-template-v2.html, Jinja2 over report.json). None when the
+    template or jinja2 is unavailable, so callers can fall back to the plain renderer."""
+    try:
+        import jinja2
+        src = _TEMPLATE_V2.read_text()
+    except Exception:
+        return None
+    env = jinja2.Environment(autoescape=True)
+    try:
+        return env.from_string(src).render(**report)
+    except Exception as exc:
+        try:
+            store.event(report.get("job"), "report.template_error", {"error": str(exc)[:200]})
+        except Exception:
+            pass
+        return None
+
+
+def to_html_plain(report: dict) -> str:
     stamps = report["stamps"]
     comp = report["compounding"]
     top3 = "".join(f"<li>{html.escape(t)}</li>" for t in report["top3"])
@@ -612,7 +636,25 @@ def to_html(report: dict) -> str:
             f'<section><h2>agent.md</h2><pre>{agent_md}</pre></section>')
 
 
+def to_html(report: dict) -> str:
+    return to_html_v2(report) or to_html_plain(report)
+
+
 def to_pdf(report: dict) -> bytes | None:
+    """WeasyPrint on the v2 design when the runtime has it (needs pango/cairo); else xhtml2pdf on
+    the plain renderer; else None (caller serves HTML)."""
+    html_v2 = to_html_v2(report)
+    if html_v2:
+        try:
+            from weasyprint import HTML  # type: ignore
+            data = HTML(string=html_v2).write_pdf()
+            if data and data[:4] == b"%PDF":
+                return data
+        except Exception as exc:
+            try:
+                store.event(report.get("job"), "report.weasyprint_unavailable", {"error": str(exc)[:160]})
+            except Exception:
+                pass
     try:
         from xhtml2pdf import pisa
     except Exception:
@@ -620,7 +662,7 @@ def to_pdf(report: dict) -> bytes | None:
     import io
     out = io.BytesIO()
     try:
-        result = pisa.CreatePDF(io.StringIO(to_html(report)), dest=out)
+        result = pisa.CreatePDF(io.StringIO(to_html_plain(report)), dest=out)
     except Exception:
         return None
     if result.err:

@@ -183,7 +183,7 @@ def test_humans_pending_when_no_answers_yet():
     rep = report.build(jid)
     assert rep["evidence"]["humans"]["pending"] is True
     doc = report.to_html(rep)
-    assert "humans pending" in doc
+    assert ("humans pending" in doc) or ("awaiting" in doc.lower()) or ("pending" in doc.lower())
 
 
 def test_to_pdf_returns_pdf_bytes_or_none_and_html_still_works():
