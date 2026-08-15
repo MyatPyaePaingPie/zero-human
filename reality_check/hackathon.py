@@ -1,7 +1,7 @@
 """Hackathon rubric evaluation: how to win THIS hackathon, from the bundle text.
 
 Reads the one fenced JSON block in `docs/hackathon-rubric.md` (everything else there is prose for
-humans), greps sponsor `evidence_hints` with zero model calls, and judges each rubric item with ONE
+humans), greps the sponsor signatures (docs/sponsor-signatures.md) with zero model calls, and judges each rubric item with ONE
 batched model call per section per persona (Groq free tier is ~30 RPM: never a per-claim call).
 
 Deterministic given the votes: status/score/why/fix/stamp/top3 are pure functions of the p values.
@@ -15,7 +15,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from reality_check import evaluators
+from reality_check import evaluators, sponsors as sponsor_sigs
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RUBRIC = REPO_ROOT / "docs" / "hackathon-rubric.md"
@@ -74,18 +74,31 @@ def load_rubric(path: str | None = None) -> dict:
     return _load(str(Path(path) if path else DEFAULT_RUBRIC))
 
 
-def sponsor_evidence(text: str, rubric: dict) -> dict[str, list[str]]:
-    """Per sponsor id: which evidence_hints actually appear in the bundle text. Zero model calls."""
-    low = (text or "").lower()
-    out: dict[str, list[str]] = {}
+def _sig_id(rubric_id: str) -> str:
+    """Rubric ids are `sponsor/<id>`; signature keys are the bare `<id>`."""
+    return str(rubric_id).split("/", 1)[-1]
+
+
+def sponsor_detections(text: str, rubric: dict) -> dict[str, dict]:
+    """Per rubric sponsor id, the mechanical depth-of-use detection from `docs/sponsor-signatures.md`.
+    A sponsor with no signature block gets an empty depth-0 detection. Zero model calls."""
+    try:
+        sig = sponsor_sigs.load_signatures()
+    except ValueError:
+        sig = {}
+    out: dict[str, dict] = {}
     for sp in rubric.get("sponsors", []):
-        found = []
-        for hint in sp.get("evidence_hints", []):
-            h = str(hint).lower().strip()
-            if h and h in low:
-                found.append(str(hint))
-        out[str(sp.get("id"))] = found
+        rid = str(sp.get("id"))
+        spec = sig.get(_sig_id(rid))
+        out[rid] = sponsor_sigs.detect_one(text, spec if isinstance(spec, dict) else {})
     return out
+
+
+def sponsor_evidence(text: str, rubric: dict) -> dict[str, list[str]]:
+    """Per sponsor id: which signature patterns actually appear in the bundle text (code first,
+    then text). Zero model calls."""
+    return {rid: sponsor_sigs.hit_strings(det)
+            for rid, det in sponsor_detections(text, rubric).items()}
 
 
 # --------------------------------------------------------------------------- scoring primitives
@@ -160,42 +173,71 @@ def _run_section(items: list[dict], text: str, personas: tuple[str, ...],
 
 # --------------------------------------------------------------------------- sponsors
 
-def _sponsor_bucket(sp: dict, rows: list[dict], hints: list[str], unknown: bool) -> str:
-    """Evidence hints (grep over README, file names, manifests, page) decide USED or NOT; the model
-    only grades how well the pitch shows it. No hint = not used (or cheapest to add when the
-    sponsor is required or the first claim is a cheap one-liner)."""
+def _sponsor_bucket(sp: dict, rows: list[dict], det: dict, unknown: bool) -> str:
+    """Depth of use (mechanical, from the signature capabilities) decides the bucket; the model only
+    grades how well the pitch shows it. Depth 0 = not used (a required sponsor becomes a cheapest
+    thing to add), 1-2 = claimed but not evidenced, 3-4 = qualifies when the meaningful_use claims
+    carry a majority."""
+    depth = int(det.get("depth", 0))
+    if depth == 0:
+        first = str((sp.get("claims") or [""])[0])
+        if sp.get("required") or len(first) <= CHEAP_CLAIM_CHARS:
+            return "cheapest_to_add"
+        return "not_used"
+    if depth <= 2:
+        return "claimed_not_evidenced"
     ps = [r["p"] for r in rows]
     majority = len([p for p in ps if p >= QUALIFY_AT]) * 2 > len(ps) if ps else False
-    if hints:
-        return "qualifies" if (majority and not unknown) else "claimed_not_evidenced"
-    first = str((sp.get("claims") or [""])[0])
-    if sp.get("required") or len(first) <= CHEAP_CLAIM_CHARS:
-        return "cheapest_to_add"
-    return "not_used"
+    return "qualifies" if (majority and not unknown) else "claimed_not_evidenced"
+
+
+_FIRST = {"sponsor/terac": 0, "sponsor/stripe": 1}
+
+
+def _sponsor_order(entries: list[dict], index: dict[str, int]) -> list[dict]:
+    """Terac and Stripe first, then the other required sponsors, then rubric order."""
+    return sorted(entries, key=lambda e: (_FIRST.get(str(e["id"]), 2 if e["required"] else 3),
+                                          index.get(str(e["id"]), 0)))
 
 
 def _sponsors(rubric: dict, text: str, rows_by_item: list[list[dict]], unknown: bool) -> dict:
-    hints = sponsor_evidence(text, rubric)
+    dets = sponsor_detections(text, rubric)
+    items = list(rubric.get("sponsors", []))
+    index = {str(sp.get("id")): i for i, sp in enumerate(items)}
     buckets: dict[str, list[dict]] = {"qualifies": [], "claimed_not_evidenced": [],
                                       "cheapest_to_add": [], "not_used": []}
-    for sp, rows in zip(rubric.get("sponsors", []), rows_by_item):
-        found = hints.get(str(sp.get("id")), [])
-        bucket = _sponsor_bucket(sp, rows, found, unknown)
+    for sp, rows in zip(items, rows_by_item):
+        rid = str(sp.get("id"))
+        det = dets.get(rid, {})
+        found = sponsor_sigs.hit_strings(det)
+        depth = int(det.get("depth", 0))
+        bucket = _sponsor_bucket(sp, rows, det, unknown)
         why, fix = _why_fix(rows)
+        used = depth > 0
         entry = {
             "id": sp.get("id"),
             "name": sp.get("name"),
             "required": bool(sp.get("required")),
             "hints_found": found,
             "claims": rows,
-            "status": ("unknown" if unknown else _status(_mean([r["p"] for r in rows])) if found else "not_used"),
-            "why": why if found else "no evidence of this sponsor in the repo, manifests, or page",
-            "fix": fix if found else f"Not used. Cheapest way in: {str((sp.get('claims') or [''])[0])}",
+            "status": ("not_used" if not used else "unknown" if unknown
+                       else _status(_mean([r["p"] for r in rows]))),
+            "why": why if used else "no evidence of this sponsor in the repo, manifests, or page",
+            "fix": fix if used else f"Not used. Cheapest way in: {det.get('cheapest_honest_add') or str((sp.get('claims') or [''])[0])}",
+            "depth": depth,
+            "depth_word": det.get("depth_word", "not used"),
+            "capabilities": det.get("capabilities", []),
+            "next_capability": det.get("next_capability"),
+            "cheapest_honest_add": det.get("cheapest_honest_add", ""),
+            "fake_tells_fired": det.get("fake_tells_fired", []),
+            "use_line": det.get("use_line", ""),
         }
         buckets[bucket].append(entry)
-    extra = sorted(buckets["cheapest_to_add"], key=lambda e: (not e["required"],))
+    extra = _sponsor_order(buckets["cheapest_to_add"], index)
     buckets["cheapest_to_add"] = extra[:3]
-    buckets["not_used"].extend(extra[3:])
+    buckets["not_used"] = _sponsor_order(buckets["not_used"] + extra[3:], index)
+    for b in ("qualifies", "claimed_not_evidenced"):
+        buckets[b] = _sponsor_order(buckets[b], index)
     return buckets
 
 

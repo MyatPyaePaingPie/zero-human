@@ -47,6 +47,17 @@ def install(monkeypatch, fake):
     return fake
 
 
+def install_sigs(monkeypatch, ids=("req", "good", "claimed", "cheap", "costly")):
+    """Signature blocks for the synthetic sponsors in `_sponsor_rubric`: `<id>code` is a code hit,
+    `<id>hint` a text-only hit, `<id>cap` ticks the one capability."""
+    sig = {i: {"code": [f"{i}code"], "text": [f"{i}hint"], "fake_tells": [f"{i}fake"],
+               "cheapest_honest_add": f"add {i}",
+               "capabilities": [{"id": "c1", "what": "the one thing", "signals": [f"{i}cap"]}]}
+           for i in ids}
+    monkeypatch.setattr(hackathon.sponsor_sigs, "load_signatures", lambda path=None: sig)
+    return sig
+
+
 # --------------------------------------------------------------------------- rubric parsing
 
 def test_load_rubric_sections_and_ids():
@@ -82,7 +93,7 @@ def test_load_rubric_invalid_json(tmp_path):
 def test_sponsor_evidence_finds_terac_case_insensitively():
     r = hackathon.load_rubric()
     hints = hackathon.sponsor_evidence("we call mcp__terac__terac_create_opportunity in the loop", r)
-    assert "terac" in [h.lower() for h in hints["sponsor/terac"]]
+    assert "terac_create_opportunity" in hints["sponsor/terac"]
     assert hints["sponsor/linq"] == []
 
 
@@ -175,12 +186,13 @@ def _sponsor_rubric():
 
 def test_sponsor_buckets(monkeypatch):
     rub = _sponsor_rubric()
+    install_sigs(monkeypatch)
     ps = {"good claim": 0.9, "claimed claim": 0.8, "cheap claim": 0.1, "c " * 100: 0.1,
           "req claim": 0.1}
     install(monkeypatch, FakeBatch(p_for=lambda c: ps.get(c, 0.9)))
-    out = hackathon.evaluate("mentions goodhint only", has_repo=False, rubric=rub)
+    out = hackathon.evaluate("goodcode goodcap and nothing else", has_repo=False, rubric=rub)
     s = out["sponsors"]
-    # hints decide used vs not: no hint = never "claimed"; short first claim = cheapest to add
+    # depth decides used vs not: depth 0 = never "claimed"; short first claim = cheapest to add
     assert [e["id"] for e in s["qualifies"]] == ["sponsor/good"]
     assert s["claimed_not_evidenced"] == []
     assert {e["id"] for e in s["cheapest_to_add"]} == {"sponsor/req", "sponsor/cheap", "sponsor/claimed"}
@@ -188,10 +200,16 @@ def test_sponsor_buckets(monkeypatch):
     assert s["not_used"][0]["status"] == "not_used"
     assert s["cheapest_to_add"][0]["required"] is True
     assert len(s["cheapest_to_add"]) <= 3
+    good = s["qualifies"][0]
+    assert (good["depth"], good["depth_word"]) == (4, "deep")
+    assert good["use_line"] == "used 1 of 1: c1."
+    assert s["not_used"][0]["depth"] == 0
+    assert s["not_used"][0]["cheapest_honest_add"] == "add costly"
 
 
 def test_cheapest_to_add_capped_at_three(monkeypatch):
     rub = _sponsor_rubric()
+    install_sigs(monkeypatch)
     for i in range(4):
         rub["sponsors"].append({"id": f"sponsor/x{i}", "name": f"X{i}", "required": False,
                                 "claims": ["short claim"], "evidence_hints": [f"x{i}hint"]})
@@ -203,23 +221,29 @@ def test_cheapest_to_add_capped_at_three(monkeypatch):
 
 # --------------------------------------------------------------------------- stamp + top3
 
+ALL_USED = " ".join(f"{i}code {i}cap" for i in ("req", "good", "claimed", "cheap", "costly"))
+
+
 def test_stamp_contender(monkeypatch):
     rub = _sponsor_rubric()
+    install_sigs(monkeypatch)
     install(monkeypatch, FakeBatch(p=0.9))
-    out = hackathon.evaluate("reqhint goodhint nowherehint cheaphint costlyhint", has_repo=False, rubric=rub)
+    out = hackathon.evaluate(ALL_USED, has_repo=False, rubric=rub)
     assert out["stamp"] == "contender"
 
 
 def test_stamp_fixable_when_heavy_items_are_only_partial(monkeypatch):
     rub = _sponsor_rubric()
+    install_sigs(monkeypatch)
     install(monkeypatch, FakeBatch(p_for=lambda c: 0.5 if c == "jc" else 0.8))
-    out = hackathon.evaluate("reqhint only", has_repo=False, rubric=rub)
+    out = hackathon.evaluate("reqcode reqcap only", has_repo=False, rubric=rub)
     assert [e["id"] for e in out["sponsors"]["qualifies"]] == ["sponsor/req"]
     assert out["stamp"] == "fixable_by_1830"
 
 
 def test_stamp_not_yet(monkeypatch):
     rub = _sponsor_rubric()
+    install_sigs(monkeypatch)
     install(monkeypatch, FakeBatch(p=0.1))
     out = hackathon.evaluate("no hints at all", has_repo=False, rubric=rub)
     assert out["stamp"] == "not_yet"
@@ -237,8 +261,9 @@ def test_top3_length_and_ordering(monkeypatch):
 
 def test_top3_empty_when_everything_passes(monkeypatch):
     rub = _sponsor_rubric()
+    install_sigs(monkeypatch)
     install(monkeypatch, FakeBatch(p=0.9))
-    out = hackathon.evaluate("reqhint goodhint nowherehint cheaphint costlyhint", has_repo=False, rubric=rub)
+    out = hackathon.evaluate(ALL_USED, has_repo=False, rubric=rub)
     assert out["top3"] == []
 
 
@@ -250,7 +275,10 @@ def test_evaluator_failure_marks_unknown_without_raising(monkeypatch):
     assert {i["status"] for i in out["judging"]} == {"unknown"}
     assert {i["status"] for i in out["messaging"]} == {"unknown"}
     assert {i["status"] for i in out["technical"]} == {"unknown"}
-    assert all(e["status"] == "unknown" for b in out["sponsors"].values() for e in b)
+    # depth 0 sponsors need no model answer, so they stay "not_used" even when the evaluator dies
+    assert all(e["status"] in ("unknown", "not_used") for b in out["sponsors"].values() for e in b)
+    detected = [e for b in out["sponsors"].values() for e in b if e["depth"] > 0]
+    assert detected and all(e["status"] == "unknown" for e in detected)
     assert not out["sponsors"]["qualifies"]
     assert len(out["warnings"]) == 5
     assert out["stamp"] == "not_yet"
