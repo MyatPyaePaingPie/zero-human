@@ -243,6 +243,20 @@ def sweep_page() -> str:
 {''.join(items) or '<p>No sweep yet.</p>'}"""
 
 
+@app.post("/admin/humans/{job_id}")
+def admin_launch_humans(job_id: str, request: Request, body: dict) -> dict:
+    """The Terac switch for one job. Header X-RC-Admin must equal RC_ENVELOPE_SECRET (the operator
+    who can sign the spend envelope may authorize a panel). Body: {arm, n, authorize_usd, operator}."""
+    secret = os.environ.get("RC_ENVELOPE_SECRET", "")
+    if not secret or request.headers.get("x-rc-admin", "") != secret:
+        raise HTTPException(403, "operator token required")
+    try:
+        return judge.launch_humans(job_id, arm=str(body.get("arm", "terac_general")), n=int(body.get("n", 3)),
+                                   authorize_usd=float(body.get("authorize_usd", 0.0)), operator=str(body.get("operator", "operator"))[:60])
+    except KeyError:
+        raise HTTPException(404, "no such job")
+
+
 def _report(job_id: str) -> dict:
     try:
         return report.build(job_id)

@@ -284,6 +284,44 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     return verdict(job_id)
 
 
+def launch_humans(job_id: str, *, arm: str = "terac_general", n: int = 3, authorize_usd: float, operator: str) -> dict:
+    """Operator-triggered human panel for an existing job (the Terac switch for ONE job): the
+    envelope's per-job/daily caps and the operator's explicit authorization both gate the quote;
+    the operator's authority is the RC_ENVELOPE_SECRET they hold (checked in api.py). Records who
+    authorized what. Refuses if a paid panel is already open on the job."""
+    job = store.get_job(job_id)
+    if not job:
+        raise KeyError(job_id)
+    st = job["state"] or {}
+    if (st.get("panel") or {}).get("external_id"):
+        return {"job_id": job_id, "launched": False, "reason": "a recruited panel is already open", "panel": st.get("panel")}
+    if job["status"] not in ("awaiting_humans", "settled", "evaluating"):
+        return {"job_id": job_id, "launched": False, "reason": f"status {job['status']}"}
+    req = JudgeRequest(**job["request"])
+    panel = panels.for_arm(arm)
+
+    def approve(quoted: float, _arm: str = arm) -> bool:
+        ok_env = envelope.gate_panel_launch(job_id, _arm, quoted, max(authorize_usd, 0.0))
+        ok_op = quoted <= authorize_usd
+        store.event(job_id, "operator.authorized", {"operator": operator, "arm": _arm, "quoted_usd": quoted,
+                                                    "authorize_usd": authorize_usd, "envelope": ok_env, "operator_ok": ok_op})
+        return ok_env and ok_op
+
+    handle = panel.launch(job_id, st.get("human_question") or req.claims[0], req.input, n, approve=approve)
+    if handle.source == "local" or handle.external_id is None:
+        store.event(job_id, "panel.operator_refused", {"arm": arm, "handle": handle.__dict__})
+        return {"job_id": job_id, "launched": False, "reason": "quote refused or backend dry", "panel": handle.__dict__}
+    st["panel"] = handle.__dict__
+    st["launched_at"] = store.now()
+    st["arm_used"] = arm
+    st["operator"] = operator
+    if handle.price_usd:
+        store.ledger_add(job_id, f"cost.{handle.source}", handle.price_usd, f"operator panel n={handle.n_requested}")
+    store.event(job_id, "panel.launched", st["panel"])
+    store.put_job(job_id, job["buyer_id"], "awaiting_humans", job["request"], st)
+    return {"job_id": job_id, "launched": True, "panel": st["panel"]}
+
+
 def _notify(job_id: str) -> None:
     """Text the buyer once per job when it settles (Linq), if they asked."""
     job = store.get_job(job_id)

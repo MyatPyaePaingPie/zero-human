@@ -237,3 +237,31 @@ def test_sweep_never_spends():
     v = c.get(f"/judge/{row['job_id']}").json()
     assert v["status"] == "settled" and v["evidence_cost_usd"] < 0.01
     assert c.get("/sweep").status_code == 200 and "Foo" in c.get("/sweep").text
+
+
+def test_admin_humans_switch_requires_token_and_launches_for_one_job(monkeypatch):
+    """The Terac switch for ONE existing job: token-gated; dry backend -> refused, no state change;
+    a fake recruiting panel -> awaiting_humans with the operator recorded."""
+    from reality_check import panels
+    monkeypatch.setenv("RC_ENVELOPE_SECRET", "op-secret")
+    v = c.post("/judge", json={"input": "Acme sells rockets", "claim": "It is clear", "sku": "reality_check",
+                               "evidence_standard": "voi_routed", "max_budget_usd": 0}).json()
+    jid = v["job_id"]
+    assert c.post(f"/admin/humans/{jid}", json={"authorize_usd": 20}).status_code == 403
+    r = c.post(f"/admin/humans/{jid}", json={"authorize_usd": 20, "operator": "aria"}, headers={"X-RC-Admin": "op-secret"})
+    assert r.status_code == 200 and r.json()["launched"] is False  # terac client is dry in tests
+
+    from reality_check.policy import envelope as env_mod
+    monkeypatch.setattr(env_mod, "gate_panel_launch", lambda job_id, arm, price, paid: price <= 20)  # signed envelope is live in prod
+
+    class FakePanel:
+        name = "terac"
+        def launch(self, job_id, question, input_text, n, approve=None):
+            assert approve(18.0) is True and approve(25.0) is False
+            return panels.PanelHandle("terac", "opp_123", f"http://x/rate/{job_id}", n, 18.0)
+    monkeypatch.setitem(panels.REGISTRY, "terac", FakePanel())
+    r = c.post(f"/admin/humans/{jid}", json={"authorize_usd": 20, "operator": "aria"}, headers={"X-RC-Admin": "op-secret"})
+    assert r.status_code == 200 and r.json()["launched"] is True, r.text
+    from reality_check import store
+    job = store.get_job(jid)
+    assert job["status"] == "awaiting_humans" and job["state"]["operator"] == "aria" and job["state"]["panel"]["external_id"] == "opp_123"
