@@ -35,8 +35,13 @@ The website stays only as the place the PDF and agent.md are hosted (and the pay
 ## Gather, DONE, pay, process (Aria, 15:40; supersedes the section above)
 1. First link or text from a phone opens the job. Ack names what they can send: `Got it, saved. Send me
    any of these, one per text or all at once: your GitHub repo link, your Google Slides link (make it
-   public), your landing page or demo link, your one-line pitch, your price. When you have sent
-   everything, text DONE and I will send your payment link ($8).` No pay link yet. Unrecognized link:
+   public), your landing page or demo link, your one-line pitch, your price. Any one is enough; more is better. When you have sent
+   everything, text DONE and I will send your payment link ($8).` No pay link yet.
+   Every link is access-checked on receipt: GitHub via api.github.com/repos (404 = private/wrong),
+   Slides via /export/pdf (must return a PDF), any URL via GET within 10s. Reply per link with what it
+   was recognized as and whether it opens: `Saved: GitHub repo (public), Google Slides (public), landing
+   page (loads).` Failures say why and how to fix (make repo public or paste README; Share -> Anyone with
+   the link; check the URL). Access status is stored per source for the report's "what we read". Unrecognized link:
    `Saved that link as your landing page; if it is a deck or repo, tell me.` Private Slides: `I cannot
    open that deck; in Slides use Share -> Anyone with the link, then send it again.`
 2. Every further message before DONE attaches (links parsed, plain text kept as pitch context) and gets a
