@@ -264,8 +264,31 @@ def evaluate(text: str, *, has_repo: bool, rubric: dict | None = None,
                 "score": round(mean_p, 4), "why": why, "fix": fix, "claims": rows,
             })
 
+    # autonomy: "can this run autonomously?" graded against how agent-run companies fail
+    # (rubric.autonomy.items, ids auto/*); its own stamp, always run
+    autonomy: list[dict] = []
+    auto_items = list((rubric.get("autonomy") or {}).get("items", []))
+    if auto_items:
+        a_rows, a_unknown, c = _run_section(auto_items, text, personas, warnings, "autonomy")
+        calls += c
+        for item, rows in zip(auto_items, a_rows):
+            why, fix = _why_fix(rows)
+            mean_p = _mean([r["p"] for r in rows])
+            autonomy.append({
+                "id": item.get("id"), "title": item.get("title"), "failure": item.get("failure"),
+                "status": "unknown" if a_unknown else _status(mean_p),
+                "score": round(mean_p, 4), "why": why, "fix": fix, "claims": rows,
+            })
+    n_pass = sum(1 for a in autonomy if a["status"] == "pass")
+    n_fail = sum(1 for a in autonomy if a["status"] == "fail")
+    autonomy_stamp = ("not_run" if not autonomy else "autonomous" if n_fail == 0 and n_pass >= len(autonomy) - 1
+                      else "human_in_the_loop" if n_fail <= 2 else "not_autonomous")
+
     out = {
         "rubric_version": rubric.get("hackathon", ""),
+        "autonomy": autonomy,
+        "autonomy_stamp": autonomy_stamp,
+        "autonomy_note": (rubric.get("autonomy") or {}).get("note", ""),
         "submission_checklist": rubric.get("submission_checklist", {}),
         "personas": list(personas),
         "model_calls": calls,

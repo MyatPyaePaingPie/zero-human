@@ -79,6 +79,9 @@ def _claim_row(idx: int, claim: str, ev, *, lens: str = "custom", claim_id: str 
     }
 
 
+RUBRIC_PERSONAS_MAX = 2
+
+
 def _judge_rubric(req: JudgeRequest) -> tuple[list[dict], float, list[str]]:
     """Full Reality Check: the run order in lenses.py IS the claim list (disabled lenses are not
     in the run at all). One batched model call per persona per lens with model/both claims;
@@ -93,7 +96,9 @@ def _judge_rubric(req: JudgeRequest) -> tuple[list[dict], float, list[str]]:
         else:
             by_lens.setdefault(lens_name, []).append(i)
     for lens_name, idxs in by_lens.items():
-        personas = req.personas or lenses.personas_for(lens_name)
+        # panel cut to 2 personas per lens (Aria, simplification pass): the hackathon rubric
+        # runs alongside and the whole job must fit Groq's ~30 RPM
+        personas = (req.personas or lenses.personas_for(lens_name))[:RUBRIC_PERSONAS_MAX]
         results = evaluators.evaluate_batch([rubric[i][0].text for i in idxs], req.input, personas)
         for i, ev in zip(idxs, results):
             c, _l, cid = rubric[i]

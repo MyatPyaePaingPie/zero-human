@@ -97,7 +97,7 @@ def test_sponsor_evidence_none_on_unrelated_text():
 def test_evaluate_no_repo_is_three_sections_times_personas(monkeypatch):
     fake = install(monkeypatch, FakeBatch(p=0.9))
     out = hackathon.evaluate(TEXT, has_repo=False)
-    assert fake.calls == 3 * 2 == out["model_calls"]
+    assert fake.calls == 4 * 2 == out["model_calls"]  # judging, sponsors, messaging, autonomy
     assert out["technical"] == []
     assert out["personas"] == ["judge", "customer"]
     assert all(len(p) == 1 for p in fake.personas)
@@ -106,14 +106,14 @@ def test_evaluate_no_repo_is_three_sections_times_personas(monkeypatch):
 def test_evaluate_with_repo_is_four_sections(monkeypatch):
     fake = install(monkeypatch, FakeBatch(p=0.9))
     out = hackathon.evaluate(TEXT, has_repo=True)
-    assert fake.calls == 4 * 2 == out["model_calls"]
+    assert fake.calls == 5 * 2 == out["model_calls"]  # + technical with a repo
     assert len(out["technical"]) == 3
 
 
 def test_evaluate_output_keys_and_ordering(monkeypatch):
     install(monkeypatch, FakeBatch(p=0.9))
     out = hackathon.evaluate(TEXT, has_repo=True)
-    assert set(out) == {"rubric_version", "submission_checklist", "personas", "model_calls", "judging", "sponsors",
+    assert set(out) == {"rubric_version", "submission_checklist", "personas", "model_calls", "judging", "sponsors", "autonomy", "autonomy_stamp", "autonomy_note",
                         "messaging", "technical", "stamp", "top3", "warnings"}
     weights = [i["weight"] for i in out["judging"]]
     assert weights == sorted(weights, reverse=True)
@@ -250,7 +250,7 @@ def test_evaluator_failure_marks_unknown_without_raising(monkeypatch):
     assert {i["status"] for i in out["technical"]} == {"unknown"}
     assert all(e["status"] == "unknown" for b in out["sponsors"].values() for e in b)
     assert not out["sponsors"]["qualifies"]
-    assert len(out["warnings"]) == 4
+    assert len(out["warnings"]) == 5
     assert out["stamp"] == "not_yet"
 
 
@@ -288,3 +288,12 @@ def test_judge_launches_hackathon_eval_for_full_check(monkeypatch):
     assert done.is_set()
     st = store.get_job(r.json()["job_id"])["state"]["hackathon"]
     assert st["stamp"] in ("contender", "fixable_by_1830", "not_yet") and len(st["judging"]) == 6
+
+
+def test_autonomy_section_runs_and_stamps(monkeypatch):
+    from reality_check import evaluators, hackathon
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    out = hackathon.evaluate("Acme: signed spend envelope, agents stop when price unknown.", has_repo=False)
+    assert len(out["autonomy"]) == 7 and all(a["id"].startswith("auto/") for a in out["autonomy"])
+    assert out["autonomy_stamp"] in ("autonomous", "human_in_the_loop", "not_autonomous")
+    assert out["model_calls"] == 8  # judging, sponsors, messaging, autonomy x 2 personas
