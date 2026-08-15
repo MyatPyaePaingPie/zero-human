@@ -285,8 +285,10 @@ def _finding_md(f: dict) -> str:
     else:
         observed = str(ev)
     acc = f.get("acceptance", {})
-    if "probe" in acc:
+    if acc.get("probe"):
         done_when = f"{acc.get('probe')} is absent on the next run."
+    elif "probe" in acc:
+        done_when = "keeps passing on the next run."
     elif acc.get("must") == "status = pass":
         done_when = f"{acc.get('claim')} reaches status = pass on re-run."
     else:
@@ -312,12 +314,23 @@ def to_agent_md(report: dict) -> str:
     business_gaps = [f for f in findings if "gap" in f]
     repo_advice = [f for f in findings if f.get("section") == "technical"]
 
+    def _open(fs: list[dict]) -> list[dict]:
+        return [f for f in fs if f.get("status") != "pass"]
+
+    def _passing_line(fs: list[dict]) -> str:
+        ok = [f["id"] for f in fs if f.get("status") == "pass"]
+        return f"Already passing ({len(ok)}): " + ", ".join(ok) if ok else ""
+
     lines.append("## Fix before 18:30 (agent-owned)")
-    for f in agent_owned:
+    for f in _open(agent_owned):
         lines.append(_finding_md(f))
+    if _passing_line(agent_owned):
+        lines.append(_passing_line(agent_owned) + "\n")
     lines.append("## Needs a human decision")
-    for f in human_owned:
+    for f in _open(human_owned):
         lines.append(_finding_md(f))
+    if _passing_line(human_owned):
+        lines.append(_passing_line(human_owned) + "\n")
     if autonomy_findings:
         autonomy = report.get("autonomy") or {}
         lines.append(f"## Can it run autonomously ({autonomy.get('k_hold', 0)} of {autonomy.get('n', len(autonomy_findings))} hold, {str(autonomy.get('stamp', 'not_run')).upper()})")
