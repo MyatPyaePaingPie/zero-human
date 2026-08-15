@@ -61,7 +61,7 @@ def test_first_inbound_with_links_creates_job_and_acks(monkeypatch):
     phone = "+15551110001"
     event = _inbound_event(phone, "here's my project https://github.com/acme/widget and https://widget.example")
     result = linq_client.handle_inbound(event)
-    assert result["enrolled"]
+    assert "enrolled" not in result   # intake takes precedence; nobody is enrolled as a rater by default
     tf = result["textflow"]
     assert tf["action"] == "started"
     job = store.get_job(tf["job_id"])

@@ -215,7 +215,7 @@ def test_linq_webhook_enrolls_and_panel_falls_back_when_dry(monkeypatch):
     secret_raw = b"0123456789abcdef0123456789abcdef"
     secret = "whsec_" + base64.b64encode(secret_raw).decode()
     monkeypatch.setenv("LINQ_WEBHOOK_SECRET", secret)
-    ev = {"event_type": "message.received", "data": {"sender_handle": {"handle": "+15550001111"}, "parts": [{"type": "text", "value": "hi"}]}}
+    ev = {"event_type": "message.received", "data": {"sender_handle": {"handle": "+15550001111"}, "parts": [{"type": "text", "value": "RATE"}]}}
     body = json.dumps(ev).encode(); ts = str(int(time.time())); mid = "msg_1"
     sig = "v1," + base64.b64encode(hmac.new(secret_raw, f"{mid}.{ts}.".encode() + body, hashlib.sha256).digest()).decode()
     r = c.post("/linq/webhook", content=body, headers={"webhook-id": mid, "webhook-timestamp": ts, "webhook-signature": sig, "content-type": "application/json"})

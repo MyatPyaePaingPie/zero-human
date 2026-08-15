@@ -98,13 +98,18 @@ def handle_inbound(event: dict[str, Any]) -> dict[str, Any]:
         opt_out(phone)
         store.event(None, "linq.optout", {"rater": rater_id(phone)})
         return {"opted_out": rater_id(phone)}
-    new = enroll(phone)
-    store.event(None, "linq.enrolled", {"rater": rater_id(phone), "new": new})
-    if new:
-        send(phone, WELCOME)
+    store.event(None, "linq.inbound", {"from": rater_id(phone), "chars": len(text)})
+    if text.upper() == "RATE":
+        # keyword-only room-rater enrollment; the default inbound is product intake, never the
+        # rater list (raters come from Terac now)
+        new = enroll(phone)
+        store.event(None, "linq.enrolled", {"rater": rater_id(phone), "new": new})
+        if new:
+            send(phone, WELCOME)
+        return {"enrolled": rater_id(phone), "new": new}
     from reality_check import textflow  # local: avoid a module-load cycle with judge/report
     result = textflow.handle_text(phone, text)
-    return {"enrolled": rater_id(phone), "new": new, "textflow": result}
+    return {"textflow": result}
 
 
 # ---- panel ------------------------------------------------------------------------------------
