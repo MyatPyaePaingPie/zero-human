@@ -47,6 +47,8 @@ def _loop(key: str, every: float, limit: int) -> None:
         try:
             for res in poll_once(key, limit):
                 store.event(None, "stripe.poll", res)
+            from reality_check import textflow
+            textflow.nudge_idle_threads()
         except Exception as exc:  # network blips must not kill the thread
             store.event(None, "stripe.poll.error", {"error": str(exc)[:300]})
         time.sleep(every)

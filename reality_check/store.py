@@ -63,6 +63,17 @@ def init() -> None:
 
 def put_job(job_id: str, buyer_id: str, status: str, request: dict, state: dict) -> None:
     with _lock, conn() as c:
+        existing = c.execute("SELECT state FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+        if existing and status != "pending_payment":
+            prior = json.loads(existing["state"])
+            if prior.get("text_thread"):
+                state = dict(state)
+                for key, value in prior.items():
+                    if key.startswith("text_") and key not in state:
+                        state[key] = value
+                state["text_thread"] = True
+                if prior.get("text_stage") != "delivered":
+                    state["text_stage"] = "paid"
         c.execute(
             "INSERT INTO jobs(job_id,created_at,updated_at,buyer_id,status,request,state) VALUES(?,?,?,?,?,?,?) "
             "ON CONFLICT(job_id) DO UPDATE SET updated_at=excluded.updated_at,status=excluded.status,state=excluded.state",

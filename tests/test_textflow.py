@@ -9,6 +9,7 @@ from tests.test_report import HACKATHON_FIXTURE
 
 
 def _no_launch(monkeypatch):
+    monkeypatch.setattr(judge, "_resolve_sources", lambda req: None)
     monkeypatch.setattr(judge, "_launch_probes", lambda job_id, url: None)
     monkeypatch.setattr(judge, "_launch_hackathon", lambda job_id, text, has_repo: None)
     monkeypatch.setenv("RC_TEXT_FREE", "1")   # existing tests cover the free (room) path
@@ -78,16 +79,14 @@ def test_first_inbound_with_links_creates_job_and_acks(monkeypatch):
     assert "http" not in acks[0]["payload"]["text"]
 
 
-def test_inbound_without_links_and_no_thread_asks(monkeypatch):
+def test_inbound_without_links_and_no_thread_opens_pitch_job(monkeypatch):
     _no_launch(monkeypatch)
     phone = "+15551110002"
     event = _inbound_event(phone, "hey I built a cool thing")
     result = linq_client.handle_inbound(event)
     tf = result["textflow"]
-    assert tf["action"] == "ask"
-    sends = [e for e in _dry_sends() if e["payload"]["to"] == linq_client.rater_id(phone)]
-    asks = [e for e in sends if e["payload"]["text"] == textflow.ASK_LINE[:80]]
-    assert len(asks) == 1
+    assert tf["action"] == "started"
+    assert store.get_job(tf["job_id"])["request"]["input"] == "hey I built a cool thing"
 
 
 # ---- on_report_ready ------------------------------------------------------------------------
@@ -178,25 +177,32 @@ def test_humans_keyword_before_answers_says_not_in_yet(monkeypatch):
     assert len(not_in_yet) == 1
 
 
-def test_paid_text_flow_creates_pending_order_and_sends_paylink_second(monkeypatch):
-    """Default (RC_TEXT_FREE unset): job waits in pending_payment; ack has no link; second text
-    carries the Payment Link with client_reference_id; the poller's complete_session starts it."""
+def test_paid_text_flow_creates_pending_order_and_waits_for_done(monkeypatch):
+    """Default (RC_TEXT_FREE unset): the first source opens one gathering job; DONE sends payment."""
     monkeypatch.setattr(judge, "_launch_probes", lambda job_id, url: None)
     monkeypatch.setattr(judge, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.setattr(judge, "_resolve_sources", lambda req: None)
     monkeypatch.delenv("RC_TEXT_FREE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("RC_PAYLINK_DEFAULT", "https://buy.stripe.com/test_link")
+    monkeypatch.setattr(textflow, "access_checker", lambda kind, url: {"kind": kind, "url": url, "ok": True,
+                                                                       "note": "", "title": "acme/rockets"})
     n0 = len(_dry_sends())
     out = linq_client.handle_inbound(_inbound_event("+15550001111", "https://github.com/acme/rockets"))
     tf = out["textflow"]
-    assert tf["action"] == "pending_payment"
+    assert tf["action"] == "gathering"
     job = store.get_job(tf["job_id"])
     assert job["status"] == "pending_payment" and job["buyer_id"].startswith("text:")
     texts = [e["payload"]["text"] for e in _dry_sends() if e.get("job_id") == tf["job_id"]]
     assert texts, "no dry sends recorded for the job"
-    # welcome (new rater) + ack + pay link: the FIRST job-related text has no link, the pay text does
+    # The opening acknowledgement never contains the payment link. DONE is the sole transition
+    # that emits it.
     acks = [t for t in texts if t.startswith("Got it")]
     assert acks and "http" not in acks[0]
-    assert any("buy.stripe.com/test_link" in t for t in texts)   # dry events keep the first 80 chars
+    assert not any("buy.stripe.com/test_link" in t for t in texts)
+    linq_client.handle_inbound(_inbound_event("+15550001111", "DONE"))
+    texts = [e["payload"]["text"] for e in _dry_sends() if e.get("job_id") == tf["job_id"]]
+    assert sum("buy.stripe.com/test_link" in t for t in texts) == 1
     created = [e for e in store.events(200) if e["kind"] == "order.created" and e["job_id"] == tf["job_id"]]
     assert created and created[0]["payload"]["pay_url"].endswith("?client_reference_id=" + tf["job_id"])
     # payment lands: complete_session starts the job with revenue
@@ -205,6 +211,7 @@ def test_paid_text_flow_creates_pending_order_and_sends_paylink_second(monkeypat
                                            "client_reference_id": tf["job_id"], "customer_details": {}})
     assert res.get("started") == tf["job_id"]
     assert store.get_job(tf["job_id"])["status"] in ("settled", "awaiting_humans", "evaluating")
+    assert store.get_job(tf["job_id"])["state"]["text_stage"] == "paid"
     with store.conn() as c:
         row = c.execute("SELECT amount_usd FROM ledger WHERE job_id=? AND kind='revenue'", (tf["job_id"],)).fetchone()
     assert row and abs(row["amount_usd"] - 8.0) < 1e-6
@@ -215,9 +222,12 @@ def test_paid_session_auto_launches_terac_when_switch_on(monkeypatch):
     from reality_check.policy import envelope as env_mod
     monkeypatch.setattr(judge_module, "_launch_probes", lambda job_id, url: None)
     monkeypatch.setattr(judge_module, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.setattr(judge_module, "_resolve_sources", lambda req: None)
     monkeypatch.delenv("RC_TEXT_FREE", raising=False)
     monkeypatch.setenv("RC_PAYLINK_DEFAULT", "https://buy.stripe.com/test_link")
     monkeypatch.setenv("RC_TERAC_AUTO", "1")
+    monkeypatch.setattr(textflow, "access_checker", lambda kind, url: {"kind": kind, "url": url, "ok": True,
+                                                                       "note": "", "title": "acme/rockets"})
     monkeypatch.setattr(env_mod, "gate_panel_launch", lambda job_id, arm, price, paid: price <= 20)
     launched = {}
     class FakeTerac:
@@ -238,17 +248,24 @@ def test_messages_before_payment_attach_to_the_same_job(monkeypatch):
     from reality_check import judge as judge_module, store
     monkeypatch.setattr(judge_module, "_launch_probes", lambda job_id, url: None)
     monkeypatch.setattr(judge_module, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.setattr(judge_module, "_resolve_sources", lambda req: None)
     monkeypatch.delenv("RC_TEXT_FREE", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("RC_PAYLINK_DEFAULT", "https://buy.stripe.com/test_link")
+    monkeypatch.setattr(textflow, "access_checker", lambda kind, url: {"kind": kind, "url": url, "ok": True,
+                                                                       "note": "", "title": kind + " title"})
     phone = "+15550007777"
     a = linq_client.handle_inbound(_inbound_event(phone, "https://github.com/acme/rockets"))["textflow"]
     b = linq_client.handle_inbound(_inbound_event(phone, "https://docs.google.com/presentation/d/abc123/edit"))["textflow"]
     c_ = linq_client.handle_inbound(_inbound_event(phone, "https://acme.example we sell rockets for $20"))["textflow"]
-    assert a["action"] == "pending_payment" and b["action"] == "attached" and c_["action"] == "attached"
+    assert a["action"] == "gathering" and b["action"] == "attached" and c_["action"] == "attached"
     assert b["job_id"] == a["job_id"] == c_["job_id"]
     req = store.get_job(a["job_id"])["request"]
     assert req["repo"] and req["deck"] and req["url"] == "https://acme.example" and "rockets for $20" in req["input"]
-    # exactly one pay link text for the job
+    # no pay link until DONE, then exactly one; PAY explicitly resends it
+    pays = [e for e in _dry_sends() if e["job_id"] == a["job_id"] and "buy.stripe.com" in e["payload"]["text"]]
+    assert len(pays) == 0
+    linq_client.handle_inbound(_inbound_event(phone, "DONE"))
     pays = [e for e in _dry_sends() if e["job_id"] == a["job_id"] and "buy.stripe.com" in e["payload"]["text"]]
     assert len(pays) == 1
     linq_client.handle_inbound(_inbound_event(phone, "PAY"))
