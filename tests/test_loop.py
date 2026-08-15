@@ -222,3 +222,13 @@ def test_linq_webhook_enrolls_and_panel_falls_back_when_dry(monkeypatch):
     assert v["status"] == "awaiting_humans"
     kinds = [e["kind"] for e in c.get("/events?limit=80").json() if e["job_id"] == v["job_id"]]
     assert "linq.nobody" in kinds and "panel.fallback" in kinds
+
+
+def test_sweep_never_spends():
+    r = c.post("/sweep", json={"items": [{"name": "Foo", "tagline": "Bar for devs", "description": "We synergize.", "url": "https://x.y"}]})
+    assert r.status_code == 200, r.text
+    row = r.json()[0]
+    assert row["voi"] is None or row["voi"]["buy"] is False or "envelope denied" in row["voi"]["reason"]
+    v = c.get(f"/judge/{row['job_id']}").json()
+    assert v["status"] == "settled" and v["evidence_cost_usd"] < 0.01
+    assert c.get("/sweep").status_code == 200 and "Foo" in c.get("/sweep").text

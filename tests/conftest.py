@@ -16,7 +16,7 @@ os.environ.pop("TERAC_API_KEY", None)
 
 from reality_check.policy import envelope  # noqa: E402
 
-_body = {"daily_cap_usd": 60, "per_job_cap_usd": 10, "min_margin_ratio": 0.2,
+_body = {"daily_cap_usd": 60, "per_job_cap_usd": 20, "min_margin_ratio": 0.2,
          "allowed_arms": ["ensemble", "linq_panel", "terac_general"],
          "expires_at": "2099-01-01T00:00:00+00:00", "signed_by": "test"}
 _body["signature"] = envelope.sign(_body, "test-secret")

@@ -26,7 +26,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from reality_check import before_after, intake, judge, linq_client, skus, store, stripe_poll, stripe_webhook, terac_client
+from reality_check import before_after, intake, judge, linq_client, skus, store, stripe_poll, stripe_webhook, sweep, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
 from reality_check.policy import envelope, learning, protocol
 
@@ -207,6 +207,36 @@ async def linq_webhook(request: Request):
 @app.get("/raters")
 def raters() -> dict:
     return {"opted_in": store.raters_count(), "linq_enabled": linq_client.enabled()}
+
+
+@app.post("/sweep")
+def post_sweep(req: sweep.SweepRequest) -> list[dict]:
+    """Judge a batch of products with no money attached (voi_routed, unpaid: only free evaluators can run)."""
+    return sweep.run(req)
+
+
+@app.get("/sweep.json")
+def sweep_json() -> list[dict]:
+    return sweep.listing()
+
+
+@app.get("/sweep", response_class=HTMLResponse)
+def sweep_page() -> str:
+    rows = sweep.listing()
+    items = []
+    for r in rows:
+        fixes = [c for c in r["claims"] if c["verdict"] != "yes"]
+        fix_html = "".join(f"<li>{html.escape(c['claim'])}" + (f" <i>({html.escape(c['minority'][:160])})</i>" if c.get("minority") else "") + "</li>" for c in fixes) or "<li>nothing obvious; strangers should get it</li>"
+        link = f'<a href="{html.escape(r["url"])}" rel="noopener">{html.escape(r["name"])}</a>' if r.get("url") else html.escape(r["name"])
+        voi = r.get("voi") or {}
+        items.append(f"<section><h2>{link} <small>{html.escape(r['verdict'])} p={r['p']:.2f}</small></h2>"
+                     f"<p><i>{html.escape(r.get('tagline') or '')}</i></p><p><b>Fix list</b></p><ul>{fix_html}</ul>"
+                     f"<p><small>router: {html.escape(str(voi.get('reason') or ''))[:200]}</small> · <a href=\"/verdict/{r['job_id']}\">full verdict</a></p></section>")
+    return f"""<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>Reality Check: today's launches</title>
+<style>body{{font:16px/1.5 -apple-system,system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;color:#111}}h2{{font-size:1.1rem;margin:1.6rem 0 .2rem}}small,i{{color:#555}}section{{border-top:1px solid #ddd;padding-top:.6rem}}</style>
+<h1>Today's launches, reality-checked</h1>
+<p>Clarity checks by model consensus only, no humans bought: can a stranger tell what it does, who it is for, and what problem it solves? Makers: the human-backed check is $8 at <a href="/">Reality Check</a>.</p>
+{''.join(items) or '<p>No sweep yet.</p>'}"""
 
 
 @app.get("/verdict/{job_id}", response_class=HTMLResponse)
