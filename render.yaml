@@ -46,6 +46,6 @@ services:
       - key: REPLAY_API_KEY
         sync: false
       - key: TERAC_PROJECT_ID
-        sync: false
+        value: fskntvr1bh3szfuyj8jsem2r
       - key: RC_ENVELOPE_SECRET
         sync: false
