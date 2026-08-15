@@ -35,6 +35,16 @@ PERSONAS: dict[str, str] = {
     "outsider": "You are an intelligent person outside the tech industry with no jargon tolerance.",
     "buyer": "You are a potential customer deciding whether to pay. Trust must be earned.",
     "designer": "You are a senior product designer judging clarity and finish.",
+    # hackathon panel (docs/hackathon-rubric.md human_panel.agentic_panel)
+    "judge": (
+        "You are a hackathon judge on this panel: a YC S26 founder, Stripe's Head of Advanced AI, and "
+        "a DeepMind group PM. You judge product craft, revenue mechanics, and whether the autonomy is "
+        "real rather than slideware. Slides describing a thing are not the thing."
+    ),
+    "customer": (
+        "You are a stranger deciding whether to pay in the next minute. You have not met the team, you "
+        "will not email anyone, and anything you cannot see on the page does not exist."
+    ),
 }
 
 _JSON_DIRECTIVE = (
