@@ -163,3 +163,18 @@ def test_unreadable_page_still_gets_a_link(monkeypatch):
                                                              meta={"error": "blocked_host"}))
     page = c.get(f"/rate/{jid}").text
     assert "their landing page" in page and "https://blocked.example" in page
+
+
+def test_landing_page_gets_a_screenshot_and_google_deck_an_embed(monkeypatch):
+    jid = _make_job(monkeypatch, [PAGE_SOURCE, PITCH_SOURCE], live_url="https://acme.example")
+    page = c.get(f"/rate/{jid}").text
+    assert "image.thum.io/get/width/900/crop/1200/noanimate/https://acme.example" in page
+    assert "Brutal read" in page or "brutal read" in page  # text block stays under the screenshot
+
+    gdeck = {"kind": "deck", "ref": "https://docs.google.com/presentation/d/1AbC_dEf-23/edit#slide=id.p",
+             "live_url": "https://docs.google.com/presentation/d/1AbC_dEf-23/edit#slide=id.p",
+             "text": "--- slide 1 ---\nRoast My Deck\n--- slide 2 ---\nMarket", "meta": {"slides": 2}}
+    jid2 = _make_job(monkeypatch, [gdeck, PITCH_SOURCE])
+    page2 = c.get(f"/rate/{jid2}").text
+    assert "https://docs.google.com/presentation/d/1AbC_dEf-23/embed?start=false&amp;loop=false" in page2
+    assert "<iframe" in page2 and "Open the deck" in page2

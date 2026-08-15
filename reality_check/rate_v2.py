@@ -43,7 +43,7 @@ def ensure_page_source(job_id: str, job: dict) -> None:
     a repo/deck was given, or a url with no pitch). The panel still has to show the landing page, so
     read it once here and cache it on state.sources. Fails soft: the link-only block still renders."""
     url = (job["request"] or {}).get("url") or ""
-    if not url.startswith("http") or any(s.get("kind") == "page" for s in _sources(job)):
+    if not url.startswith("http") or any(s.get("kind") == "page" and (s.get("first_screen") or "").strip() for s in _sources(job)):
         return
     try:
         from reality_check import judge, sources as sources_mod
@@ -57,8 +57,33 @@ def ensure_page_source(job_id: str, job: dict) -> None:
         store.event(job_id, "rate.page_read_failed", {"error": str(exc)[:200]})
         return
     st = job["state"].get("sources") or {"source_kinds": [], "sources": [], "warnings": []}
-    st["sources"] = [row] + list(st.get("sources") or [])
+    # replace an older page row that predates first_screen (jobs created before rate v2)
+    st["sources"] = [row] + [x for x in (st.get("sources") or []) if x.get("kind") != "page"]
     st["source_kinds"] = ["page"] + [k for k in st.get("source_kinds", []) if k != "page"]
+    job["state"]["sources"] = st
+    store.patch_job_state(job_id, "sources", st)
+
+
+def ensure_repo_source(job_id: str, job: dict) -> None:
+    """Older jobs stored the repo source without first_screen; read the README once (2 API calls)."""
+    repo = (job["request"] or {}).get("repo") or ""
+    if not repo.startswith("http") or any(s.get("kind") == "repo" and (s.get("first_screen") or "").strip() for s in _sources(job)):
+        return
+    try:
+        from reality_check import judge, sources as sources_mod
+        src = sources_mod.read_repo(repo)
+        if not (src.text or "").strip():
+            return
+        d = src.as_dict()
+        row = {k: v for k, v in d.items() if k != "text"} | {
+            "chars": len(d.get("text") or ""), "first_screen": judge._first_screen(d), "link": repo}
+    except Exception as exc:  # pragma: no cover
+        store.event(job_id, "rate.repo_read_failed", {"error": str(exc)[:200]})
+        return
+    st = job["state"].get("sources") or {"source_kinds": [], "sources": [], "warnings": []}
+    st["sources"] = [x for x in (st.get("sources") or []) if x.get("kind") != "repo"] + [row]
+    if "repo" not in st.get("source_kinds", []):
+        st["source_kinds"] = list(st.get("source_kinds", [])) + ["repo"]
     job["state"]["sources"] = st
     store.patch_job_state(job_id, "sources", st)
 
@@ -72,11 +97,11 @@ def stimulus(job: dict) -> list[dict]:
         s = by_kind.get(kind)
         if s:
             out.append({"kind": kind, "label": _LABELS[kind], "text": s["first_screen"],
-                        "link": s.get("link") or "", "link_label": _LINK_LABELS[kind]})
+                        "link": s.get("link") or s.get("ref") or "", "link_label": _LINK_LABELS[kind]})
     if not out and by_kind.get("repo"):
         s = by_kind["repo"]
         out.append({"kind": "repo", "label": _LABELS["repo"], "text": s["first_screen"],
-                    "link": s.get("link") or "", "link_label": _LINK_LABELS["repo"]})
+                    "link": s.get("link") or s.get("ref") or "", "link_label": _LINK_LABELS["repo"]})
     return out
 
 
@@ -143,6 +168,7 @@ def _radio(name: str, value: str, label: str, required: bool = False) -> str:
 
 def render(job_id: str, job: dict, *, src: str, respondent: str, terac_id: str | None) -> str:
     ensure_page_source(job_id, job)
+    ensure_repo_source(job_id, job)
     if job["state"].get("panel_version") != PANEL_VERSION:
         store.patch_job_state(job_id, "panel_version", PANEL_VERSION)
     blocks = []
