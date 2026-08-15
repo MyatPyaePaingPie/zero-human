@@ -25,7 +25,8 @@ from dataclasses import dataclass
 from reality_check.core.models import VoiDecision
 
 PANEL_N = 5                                                       # humans per panel (judge.HUMAN_TARGET_N)
-TERAC_CPI_USD = float(os.environ.get("TERAC_CPI_USD", "1.0"))    # per-response planning price; set from the booth quote
+TERAC_CPI_USD = float(os.environ.get("TERAC_CPI_USD", "4.5"))    # per-response; Terac draft quote 2026-08-15: $4.50 for a 2-min activity, genpop
+TERAC_PANEL_N = int(os.environ.get("TERAC_PANEL_N", "3"))         # humans per Terac panel (>= judge.HUMAN_MIN_N_TO_SETTLE); $13.50 at quote
 TERAC_EXPERT_CPI_USD = float(os.environ.get("TERAC_EXPERT_CPI_USD", "28.0"))
 
 MIN_SETTLED = 10          # below this, gain is the prior, not a measurement
@@ -53,7 +54,7 @@ class EvidenceArm:
 DEFAULT_ARMS: tuple[EvidenceArm, ...] = (
     EvidenceArm("ensemble", price_usd=0.02, latency_s=15, prior_gain=0.15),
     EvidenceArm("linq_panel", price_usd=1.00, latency_s=300, prior_gain=0.45),
-    EvidenceArm("terac_general", price_usd=TERAC_CPI_USD * PANEL_N, latency_s=3600, prior_gain=0.60),
+    EvidenceArm("terac_general", price_usd=TERAC_CPI_USD * TERAC_PANEL_N, latency_s=3600, prior_gain=0.60),
     EvidenceArm("terac_expert", price_usd=TERAC_EXPERT_CPI_USD, latency_s=21600, prior_gain=0.75),
 )
 

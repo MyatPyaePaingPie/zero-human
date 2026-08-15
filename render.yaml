@@ -30,7 +30,7 @@ services:
       - key: RC_HUMAN_TIMEOUT_S
         value: "1800"
       - key: TERAC_CPI_USD
-        value: "1.0"
+        value: "4.5"
       - key: GROQ_API_KEY
         sync: false
       - key: OPENAI_API_KEY

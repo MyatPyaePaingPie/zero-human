@@ -27,7 +27,7 @@ from reality_check import store
 from reality_check.panels import PUBLIC_BASE, PanelHandle
 
 BASE = os.environ.get("TERAC_API_BASE", "https://terac.com/api/external/v2")
-from reality_check.core.voi import TERAC_CPI_USD as DEFAULT_CPI_USD  # one price constant for gate, ledger, planning
+from reality_check.core.voi import TERAC_CPI_USD as DEFAULT_CPI_USD, TERAC_PANEL_N  # one price constant for gate, ledger, planning
 TIMEOUT = 20.0
 
 
@@ -70,19 +70,30 @@ class TeracPanel:
             store.event(job_id, "terac.dry", {"reason": "no TERAC_API_KEY", "rate_url": rate_url, "n": n})
             return PanelHandle("terac", None, rate_url, n, 0.0)
         title = "Quick judgment: read a short text, answer yes/no questions"
+        n = min(int(n), TERAC_PANEL_N)  # Terac panels are the expensive tier: recruit the settle minimum, not the local target
         body = {
             "title": title,
             "project_id": self.project_id,
             "num_participants": max(1, min(int(n), 1000)),
             "business_type": self.business_type,
             "unrestricted_audience": True,
-            "expected_days_to_complete": 1,
+            "expected_days_to_complete": 5,   # Terac minimum (calendar days); recruitment window, not our deadline
             "description": ("Read a short text and answer a few yes/no questions honestly. "
                             "About 2 minutes. Opens an external page; submit there to complete."),
             "tasks": [{
                 "sequence": 1, "task_type": "activity", "review_type": "auto_approve",
                 "task_url": rate_url, "title": title, "duration_minutes": 2,
                 "description": question[:1000],
+            }],
+            # a study cannot launch without a screener; one question, one rejecting catch-all
+            "screening_questions": [{
+                "key": "q0", "pick": "one",
+                "text": "How do you usually read a new product's website when you first find it?",
+                "answers": [
+                    {"text": "I skim it on my phone or laptop and decide in a minute or two", "qualify_logic": "may"},
+                    {"text": "I read it carefully and compare with others", "qualify_logic": "may"},
+                    {"text": "I do not read product websites", "qualify_logic": "reject"},
+                ],
             }],
         }
         try:
