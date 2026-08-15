@@ -225,7 +225,7 @@ def test_linq_webhook_enrolls_and_panel_falls_back_when_dry(monkeypatch):
 
 
 def test_sweep_never_spends():
-    r = c.post("/sweep", json={"items": [{"name": "Foo", "tagline": "Bar for devs", "description": "We synergize.", "url": "https://x.y"}]})
+    r = c.post("/sweep?sync=true", json={"items": [{"name": "Foo", "tagline": "Bar for devs", "description": "We synergize.", "url": "https://x.y"}]})
     assert r.status_code == 200, r.text
     row = r.json()[0]
     assert row["voi"] is None or row["voi"]["buy"] is False or "envelope denied" in row["voi"]["reason"]

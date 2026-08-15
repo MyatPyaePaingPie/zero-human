@@ -210,9 +210,10 @@ def raters() -> dict:
 
 
 @app.post("/sweep")
-def post_sweep(req: sweep.SweepRequest) -> list[dict]:
-    """Judge a batch of products with no money attached (voi_routed, unpaid: only free evaluators can run)."""
-    return sweep.run(req)
+def post_sweep(req: sweep.SweepRequest, sync: bool = False) -> dict | list[dict]:
+    """Judge a batch of products with no money attached (voi_routed, unpaid: only free evaluators can run).
+    Background by default; ?sync=true for small batches/tests."""
+    return sweep.run(req) if sync else sweep.start_background(req)
 
 
 @app.get("/sweep.json")

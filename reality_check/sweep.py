@@ -7,6 +7,7 @@ Publishing them (GET /sweep) as "clarity checks with a fix list" is content, not
 """
 from __future__ import annotations
 
+import threading
 import uuid
 
 from pydantic import BaseModel, Field
@@ -34,6 +35,15 @@ class SweepRequest(BaseModel):
     cost_if_wrong_usd: float = Field(default=20.0, ge=0.0)
 
 
+def start_background(req: SweepRequest) -> dict:
+    """Return immediately; items are judged one by one in a daemon thread (evaluators are slow
+    on free tiers and a 20-item batch outlives any HTTP timeout)."""
+    t = threading.Thread(target=run, args=(req,), daemon=True, name="sweep")
+    t.start()
+    store.event(None, "sweep.started", {"n": len(req.items), "source": req.items[0].source})
+    return {"queued": len(req.items), "watch": "/sweep"}
+
+
 def run(req: SweepRequest) -> list[dict]:
     out = []
     for it in req.items:
@@ -48,6 +58,7 @@ def run(req: SweepRequest) -> list[dict]:
         store.put_job(job_id, job["buyer_id"], job["status"], job["request"], job["state"])
         out.append({"job_id": job_id, "name": it.name, "verdict": v.verdict, "p": v.p, "voi": v.voi.model_dump() if v.voi else None,
                     "claims": [{"claim": c.claim, "verdict": c.verdict, "p": c.p_internal} for c in v.claims], "summary": v.summary})
+    store.event(None, "sweep.done", {"n": len(out)})
     return out
 
 
