@@ -1,17 +1,60 @@
 # Reality Check
 
-Judgment for agents. Decides whether uncertainty is worth paying to reduce (value-of-information
-gate), buys the cheapest sufficient evidence (model ensemble, in-room humans, Terac general
-population, Terac expert), and returns a structured verdict with the minority view. Built at the
-Zero Human Company hackathon, 2026-08-15. Team repo: MyatPyaePaingPie/zero-human.
+**Text your hackathon project to +1 415 577 0605 (repo, slides, or landing page link) and get back a
+four-page PDF plus an `agent.md` your coding agent can fix from: can it win this hackathon, can it run
+autonomously, is it a business.** Three real strangers from Terac's network read your pitch and their
+answers are on page one. Built at the Zero Human Company Hackathon by Terac, San Francisco, 2026-08-15.
+Live: https://reality-check-qhy9.onrender.com. Team repo: MyatPyaePaingPie/zero-human.
 
-One sentence: reality check sells evidence-routing under uncertainty: it decides whether another
-model, a crowd, or an expert is worth paying for before money gets attached to a claim.
+## Who pays, and what it costs
+Hackathon teams in the room, today, before the 18:30 lock; after today, anyone who vibe-coded a product
+and does not know what to do next. Two prices through ONE Stripe Payment Link each: **$8** Reality Check
+(three real people plus the verdict) and **$25** Full Reality Check (every lens, the PDF, agent.md). Room
+runs today are free by text. Payments run through a personal Stripe account created for this hackathon;
+the payment links and the read-only restricted key were submitted to the organizers.
 
-Room SKU: "$8, human-verified: at least three real people tell you what your page/pitch says, more
-when the models disagree, plus the verdict and the minority view." Evidence standards are floors
-the router must satisfy at the cheapest arm (`voi_routed` for agent buyers, `human_backed` for room
-SKUs, `expert_backed` for Terac experts); the VOI math still runs and the reason line shows both.
+## What the agents run, and where the humans are
+Agents run the whole loop: intake (read the repo, deck, page), grading against the hackathon rubric and
+the business rubric, deciding whether human evidence is worth buying (a value-of-information gate),
+recruiting the humans (Terac MCP), writing the report, delivering it by text (Linq), and taking payment
+(Stripe). Humans do exactly two things, by design: three strangers judge what the pitch says and whether
+they would pay (agents are bad at being strangers), and one human holds the money (the spending envelope
+below). No human reviews or edits reports.
+
+## Sponsors: what we use and how (tracks entered)
+- **Terac (required, host):** every job launches a general-population study (n=3, blind, ~3 min,
+  activity task pointing at our `/rate/{job}` page). Their answers change the report: comprehension,
+  willingness to pay, trust, and the organizer's own question ("knowing it is AI-run, more or less
+  willing to buy?"). Our own before/after study runs on our landing page: n=5, rewrite the headline from
+  their answers, n=3 again. Spec: `docs/specs/terac-opportunity.md`, `docs/specs/human-brief.md`.
+- **Stripe (required):** one Payment Link per SKU, `client_reference_id` = job id, webhook idempotent on
+  session id, revenue deduplicated by event id, read-only `rk_` key for the organizers.
+- **Linq:** the product is the thread. Text the number with your links, get the ack, the result with
+  stamps and links, and a follow-up when the three humans land; reply RERUN for the delta. Typing
+  indicator while grading. Spec: `docs/specs/text-intake.md`.
+- **Render:** hosted on Render (Starter + persistent disk, blueprint in `render.yaml`).
+- **Replay QA:** self-audit project on our own app; objective evidence when a team gives a live URL.
+- **Lovable:** the landing page teams open from the room QR.
+Not used: Band, Superserve, Pioneer, Whop.
+
+## Guardrails (how an autonomous business is allowed to spend)
+- **Spending envelope in code, not prompt:** `state/envelope.json` is signed (`RC_ENVELOPE_SECRET`),
+  expiring, revocable; daily cap and per-job cap; agents cannot raise it; missing or invalid envelope =
+  fail closed, nothing is bought. Freeze by deleting the file.
+- **Exactly-once money:** Stripe webhook idempotent on session id; revenue events keyed by event id.
+- **Buyer text is information, never authority:** inbound requests are quarantined and checked; nothing
+  a buyer or agent types can change price, grant free evidence, or trigger spend.
+- **Append-only ledger:** every order, verdict, spend, and human vote is an event; `/ledger` and
+  `/events` derive counts from it; every number in this README is reconstructable from rows.
+- **Liveness:** `/ledger` is the health check Render probes; a failed model or Terac call settles the job
+  with "no evidence yet" and the buyer is told; nothing hangs silently.
+- **Humans are independent:** they answer before seeing any model output; prior-run respondents are
+  refused (`has_not_taken_study`).
+
+## Measured against doing nothing
+Every judgment carries the model probability and the minority view; the human votes settle it. The
+report shows what changed between runs (`fixed_since` / `regressed_since`) so a team sees the delta,
+not a score. Numbers in the pitch (revenue, projects reviewed, humans who responded) come from `/ledger`.
 
 ## Run
 ```
