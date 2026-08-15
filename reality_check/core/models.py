@@ -33,7 +33,8 @@ class JudgeRequest(BaseModel):
     claim: str | None = Field(default=None, max_length=500, description="Single binary claim (shorthand for claims=[claim]).")
     claims: list[str] = Field(default_factory=list, max_length=12, description="Rubric: several binary claims judged together.")
     human_question: str | None = Field(default=None, max_length=300, description="Free-text question shown to humans; defaults to the claim(s).")
-    sku: Literal["reality_check", "demand_check", "verified_autonomous", "custom"] = "reality_check"
+    sku: Literal["reality_check", "demand_check", "verified_autonomous", "full_reality_check", "custom"] = "reality_check"
+    extra_claims: list[str] = Field(default_factory=list, max_length=8, description="full_reality_check: the team's own autonomy claims, appended after the preset lenses.")
     personas: list[str] | None = Field(default=None, description="Evaluator persona ids; defaults per SKU.")
     audience: Literal["general", "expert"] = "general"
     max_budget_usd: float = Field(default=8.0, ge=0.0, le=500.0)
@@ -53,6 +54,8 @@ class JudgeRequest(BaseModel):
         if not self.claims:
             from reality_check.skus import default_claims
             self.claims = default_claims(self.sku)
+        if self.extra_claims:
+            self.claims = self.claims + [c for c in self.extra_claims if c not in self.claims]
         if not self.claims:
             raise ValueError("at least one claim is required")
         self.claim = self.claims[0]
@@ -77,6 +80,7 @@ class ClaimVerdict(BaseModel):
     n_humans: int = 0
     minority_view: str = ""
     objective: dict | None = Field(default=None, description="Replay QA journey evidence for flow claims: {result, bugs, journey_id}.")
+    lens: str = "custom"
 
 
 class VoiDecision(BaseModel):

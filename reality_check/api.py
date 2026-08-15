@@ -177,6 +177,37 @@ async def rate_submit(job_id: str, request: Request):
     return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:18px system-ui;margin:3rem'>Thanks. That's it.</p>")
 
 
+@app.get("/verdict/{job_id}", response_class=HTMLResponse)
+def verdict_page(job_id: str) -> str:
+    """Buyer-facing verdict, one block per lens: verdict, evidence source, n, cost. Plain text on purpose."""
+    try:
+        v = judge.verdict(job_id)
+    except KeyError:
+        raise HTTPException(404, "no such job")
+    by_lens: dict[str, list] = {}
+    for cv in v.claims:
+        by_lens.setdefault(cv.lens, []).append(cv)
+    order = [l for l in skus.LENS_ORDER if l in by_lens] + [l for l in by_lens if l not in skus.LENS_ORDER]
+    blocks = []
+    for lens in order:
+        rows = "".join(
+            f"<li><b>{html.escape(cv.verdict)}</b> {html.escape(cv.claim)} "
+            f"<small>models p={cv.p_internal:.2f}" + (f", humans {cv.n_humans} p={cv.p_humans:.2f}" if cv.p_humans is not None else "") +
+            (f", replay {html.escape(str(cv.objective.get('result')))}" if cv.objective else "") + "</small>"
+            + (f"<br><i>minority: {html.escape(cv.minority_view)}</i>" if cv.minority_view else "") + "</li>"
+            for cv in by_lens[lens])
+        passed = sum(1 for cv in by_lens[lens] if cv.verdict == "yes")
+        blocks.append(f"<h2>{lens}: {passed}/{len(by_lens[lens])} hold</h2><ul>{rows}</ul>")
+    voi = v.voi
+    econ = (f"<h2>economics</h2><p>revenue ${v.revenue_usd:.2f}, evidence cost ${v.evidence_cost_usd:.2f}, margin ${v.margin_usd:.2f}.<br>"
+            f"router: {html.escape(voi.reason) if voi else 'n/a'}" + (f" (net value ${voi.net_value_usd:.2f})" if voi else "") + "</p>")
+    return f"""<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>Reality Check verdict</title>
+<style>body{{font:16px/1.5 -apple-system,system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;color:#111}}h2{{margin-top:1.6rem;font-size:1.1rem}}li{{margin:.5rem 0}}small,i{{color:#555}}</style>
+<h1>Verdict: {html.escape(v.verdict)} <small>(p={v.p:.2f}, {v.status})</small></h1>
+<p>{html.escape(v.summary)}</p>{''.join(blocks)}{econ}
+<p><small>job {v.job_id}. Human answers: {v.n_humans}. Evaluators: {v.n_evaluators}.</small></p>"""
+
+
 @app.get("/ledger")
 def ledger() -> dict:
     return store.ledger_totals()

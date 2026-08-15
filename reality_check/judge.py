@@ -253,7 +253,9 @@ def verdict(job_id: str) -> Verdict:
     st = job["state"]
     by_claim = _answers_by_claim(job_id)
     cvs = [_claim_verdict(c, by_claim.get(c["idx"], [])) for c in st.get("claims", [])]
-    for cv, c in zip(cvs, st.get("claims", [])):
+    lens_names = skus.lenses_for(job["request"].get("sku", "custom"), len(cvs))
+    for cv, c, ln in zip(cvs, st.get("claims", []), lens_names):
+        cv.lens = ln
         j = (st.get("replay") or {}).get("journeys", {}).get(str(c["idx"]))
         if j:
             cv.objective = {"source": "replay_qa", "journey_id": j["journey_id"], "result": j.get("result"), "bugs": j.get("bugs", [])}

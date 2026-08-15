@@ -40,6 +40,31 @@ SKUS: dict[str, dict] = {
     "custom": {"price_usd": 8.0, "claims": [], "personas": None, "human_question": None},
 }
 
+# One intake, every lens. Lenses tag claims so the verdict page groups evidence by question:
+# clarity (do strangers get it), demand (money-swarm demand-to-build gate), autonomy (the team's
+# own claims, appended at request time), economics (what evidence cost and what the router refused;
+# comes from the ledger, not a claim).
+SKUS["full_reality_check"] = {
+    "price_usd": 25.0,
+    "evidence_standard": "human_backed",
+    "claims": SKUS["reality_check"]["claims"] + SKUS["demand_check"]["claims"],
+    "lenses": ["clarity"] + ["demand"] * len(SKUS["demand_check"]["claims"]),
+    "personas": ["buyer", "operator", "skeptic", "outsider", "designer"],
+    "human_question": "Read it as a stranger. For each line say yes or no. Then one sentence: what is this, and would you pay?",
+}
+LENS_ORDER = ("clarity", "demand", "autonomy", "economics")
+
+
+def lenses_for(sku: str, n_claims: int) -> list[str]:
+    """Lens per claim; claims beyond the preset (team-supplied) are 'autonomy'; single-lens SKUs
+    map to their own name."""
+    preset = list(SKUS.get(sku, {}).get("lenses") or [])
+    single = {"reality_check": "clarity", "demand_check": "demand", "verified_autonomous": "autonomy"}.get(sku)
+    out = preset[:n_claims]
+    while len(out) < n_claims:
+        out.append(single or ("autonomy" if sku == "full_reality_check" else "custom"))
+    return out
+
 
 def default_claims(sku: str) -> list[str]:
     return list(SKUS.get(sku, {}).get("claims", []))

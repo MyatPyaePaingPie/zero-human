@@ -41,6 +41,8 @@ services:
         sync: false
       - key: RC_PAYLINK_DEFAULT
         sync: false
+      - key: RC_PAYLINK_FULL_REALITY_CHECK
+        sync: false
       - key: TERAC_API_KEY
         sync: false
       - key: REPLAY_API_KEY

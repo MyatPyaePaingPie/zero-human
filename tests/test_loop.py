@@ -165,3 +165,14 @@ def test_before_after_refuses_shared_respondents():
         c.post(f"/rate/{a['job_id']}", data={"c0": "yes", "n_claims": "1", "src": "local", "respondent": f"q{i}"})
     cmp_ = c.get(f"/before_after/{b['job_id']}/{a['job_id']}").json()
     assert cmp_["decision"] == "measured" and cmp_["locked_at"] and cmp_["delta_p"] > 0
+
+
+def test_full_reality_check_bundle_lenses():
+    r = c.post("/judge", json={"input": "Acme: AI roast of pitch decks for YC founders, $20, 3 paid.", "sku": "full_reality_check",
+                               "extra_claims": ["A user can pay and receive the roast without a human"]}, headers={"X-RC-Paid": "25"})
+    assert r.status_code == 200, r.text
+    v = r.json(); jid = v["job_id"]
+    lenses = [x["lens"] for x in v["claims"]]
+    assert lenses == ["clarity"] + ["demand"] * 6 + ["autonomy"] and v["status"] == "awaiting_humans"
+    page = c.get(f"/verdict/{jid}").text
+    assert "clarity" in page and "demand" in page and "autonomy" in page and "economics" in page

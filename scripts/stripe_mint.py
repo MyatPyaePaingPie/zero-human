@@ -7,9 +7,16 @@ import sys
 
 import httpx
 
-NAME, PRICE_CENTS = "Reality Check", 800
-DESC = ("Human-verified reality check: at least three real people tell you what your page or pitch says, "
-        "more when the models disagree, plus the verdict and the minority view.")
+PRODUCTS = {
+    "reality_check": ("Reality Check", 800,
+        "Human-verified reality check: at least three real people tell you what your page or pitch says, "
+        "more when the models disagree, plus the verdict and the minority view."),
+    "full_reality_check": ("Full Reality Check", 2500,
+        "One paste, every lens: do strangers get it (clarity), is there demand (six-point gate), do your autonomy "
+        "claims hold, and what the evidence cost. Human-verified, model consensus, objective QA where a URL exists."),
+}
+SKU = sys.argv[1] if len(sys.argv) > 1 else "reality_check"
+NAME, PRICE_CENTS, DESC = PRODUCTS[SKU]
 
 
 def key() -> str:
@@ -42,8 +49,8 @@ def main() -> None:
             "line_items[0][price]": price["id"], "line_items[0][quantity]": 1,
             "line_items[0][adjustable_quantity][enabled]": "true", "line_items[0][adjustable_quantity][minimum]": 1, "line_items[0][adjustable_quantity][maximum]": 10,
             "after_completion[type]": "hosted_confirmation",
-            "after_completion[hosted_confirmation][custom_message]": "Paid. Show this screen at the Reality Check table, or paste your page URL to the agent that sent you here.",
-            "metadata[product]": "reality_check",
+            "after_completion[hosted_confirmation][custom_message]": "Paid. Show this screen at the Reality Check table, or paste your page URL to the agent that sent you here. Your verdict page link arrives when the job settles.",
+            "metadata[product]": SKU,
         }).raise_for_status().json()
     print(link["url"])
 

@@ -32,8 +32,11 @@ Dev only: `RC_DEV=1` makes `X-RC-Paid: <usd>` count as payment on /judge and /in
 Demo: `python demo/buyer_agent.py "PitchPolish"` writes copy, buys judgment, shows the router
 refusing at low stakes and buying at high stakes, rewrites from human feedback, prints before/after.
 
+Bundle SKU `full_reality_check` ($25): one paste, every lens (clarity, demand gate, the team's own
+autonomy claims, economics). `GET /verdict/{job}` renders the verdict grouped by lens.
+
 ## Endpoints
-POST /judge, POST /intake, POST /order + GET /order/{id}, GET /judge/{id}, GET|POST /rate/{id},
+POST /judge, POST /intake, POST /order + GET /order/{id}, GET /judge/{id}, GET /verdict/{id}, GET|POST /rate/{id},
 POST /before_after/lock/{id}, GET /before_after/{b}/{a}, GET /ledger, /events, /jobs, /learning, GET /.
 
 ## Layout
