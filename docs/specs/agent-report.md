@@ -33,6 +33,13 @@ enforces the handoff afterwards.
 4. **Every finding carries an acceptance check** the next run will execute: for objective findings the
    finding id that must be absent (`{"probe": "audit/x-missing", "must": "absent"}`); for model/human findings the claim text that must reach `p >= 0.7`.
 5. **Additive only.** New lenses add findings; existing ids never change meaning.
+6. **Compounding matcher.** Prior runs match on full origin (scheme + host + port), never registrable
+   domain (`*.vercel.app` hosts strangers), and never on default buyer ids (`anonymous`, `sweep:*`).
+   Chains via `before_job` count too.
+7. **Disclosed stamp rule.** The RED/AMBER/GREEN conditions are printed verbatim from code in the
+   agent.md header and the PDF footer.
+8. **Delivery.** `/report/{job}.json`, `/report/{job}/agent.md`, `/report/{job}.pdf` (same JSON, one
+   HTML template). No accounts: the job URL is the identity.
 
 ## JSON shape (`/report/{job}.json`)
 
