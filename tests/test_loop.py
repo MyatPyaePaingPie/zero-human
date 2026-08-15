@@ -56,3 +56,10 @@ def test_demand_check_rubric_multi_claim():
     assert v["status"] == "settled" and v["n_humans"] == 3
     assert [x["verdict"] for x in v["claims"]] == ["yes"] * 5 + ["no"] and v["verdict"] == "no"
     assert c.get(f"/rate/{jid}").status_code == 200
+
+
+def test_intake_verified_autonomous():
+    r = c.post("/intake", json={"team": "acme", "live_url": "https://acme.example", "claims": ["No human approves any purchase", "Agent hires humans via Terac on its own"], "invariants": ["Spend never exceeds $20/day"]}, headers={"X-RC-Paid": "10"})
+    assert r.status_code == 200, r.text
+    v = r.json()
+    assert len(v["claims"]) == 2 and v["status"] == "awaiting_humans"

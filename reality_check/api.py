@@ -19,7 +19,7 @@ import os
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from reality_check import judge, skus, store
+from reality_check import intake, judge, skus, store
 from reality_check.core.models import JudgeRequest, Verdict
 
 app = FastAPI(title="Reality Check", version="0.0.1")
@@ -32,6 +32,13 @@ TERAC_CALLBACK = "https://terac.com/api/external/callback"
 def post_judge(req: JudgeRequest, x_rc_paid: str | None = Header(default=None)) -> Verdict:
     paid = float(x_rc_paid) if x_rc_paid else 0.0
     return judge.start(req, paid_usd=paid)
+
+
+@app.post("/intake", response_model=Verdict)
+def post_intake(req: intake.IntakeRequest, x_rc_paid: str | None = Header(default=None)) -> Verdict:
+    if x_rc_paid:
+        req.paid_usd = float(x_rc_paid)
+    return intake.submit(req)
 
 
 @app.get("/skus")
