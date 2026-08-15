@@ -14,7 +14,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from reality_check import evaluators, panels, skus, store
+from reality_check import evaluators, panels, replay_client, skus, store
 from reality_check.core import consensus, voi
 from reality_check.core.brier import brier
 from reality_check.core.models import ClaimVerdict, JudgeRequest, Verdict, VoiDecision
@@ -248,6 +248,12 @@ def verdict(job_id: str) -> Verdict:
             "Human panel pending." if job["status"] == "awaiting_humans" else "Internal consensus sufficient.")
     if st.get("timed_out"):
         summary = "Human panel did not answer in time; model-only verdict. " + summary
+    if st.get("replay"):
+        before = st["replay"].get("polled_at")
+        st["replay"] = replay_client.refresh(job_id, st["replay"])
+        if st["replay"].get("polled_at") != before:
+            store.put_job(job_id, job["buyer_id"], job["status"], job["request"], st)
+        summary += " " + replay_client.summary_line(st["replay"])
     if all_skipped:
         summary = "Model evaluators unavailable (provider errors); humans are the only evidence. " + summary
     minority = next((v.minority_view for v in cvs if v.minority_view), "")

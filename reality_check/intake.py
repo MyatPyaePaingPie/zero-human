@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from reality_check import judge
+from reality_check import judge, replay_client, store
 from reality_check.core.models import JudgeRequest, Verdict
 
 
@@ -23,4 +23,12 @@ def submit(req: IntakeRequest) -> Verdict:
     jr = JudgeRequest(input=text, claims=req.claims, sku="verified_autonomous", cost_if_wrong_usd=200.0,
                       max_budget_usd=10.0, buyer_id=f"team:{req.team}", force_humans=True,
                       human_question="Based on what you can see at the URL, does this claim hold? Yes or no, and what convinced you.")
-    return judge.start(jr, paid_usd=req.paid_usd)
+    v = judge.start(jr, paid_usd=req.paid_usd)
+    # objective evidence: Replay QA crawls the live URL while humans judge the claims
+    handle = replay_client.launch(v.job_id, req.live_url, f"reality-check {req.team}")
+    if handle:
+        job = store.get_job(v.job_id)
+        job["state"]["replay"] = handle
+        store.put_job(v.job_id, job["buyer_id"], job["status"], job["request"], job["state"])
+        v = judge.verdict(v.job_id)
+    return v

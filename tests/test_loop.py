@@ -133,3 +133,11 @@ def test_stripe_failed_start_is_not_claimed(monkeypatch):
     assert stripe_webhook.complete_session(sess).get("started") == jid  # retried, not duplicate
     assert stripe_webhook.complete_session(sess) == {"duplicate": "cs_test_fail"}
     assert stripe_webhook.complete_session({"id": "cs_x", "amount_total": 100}) == {"unpaid": "cs_x"}
+
+
+def test_intake_without_replay_key_is_dry():
+    r = c.post("/intake", json={"team": "acme", "live_url": "https://example.com", "claims": ["The checkout works without a human"]}, headers={"X-RC-Paid": "10"})
+    assert r.status_code == 200, r.text
+    jid = r.json()["job_id"]
+    kinds = [e["kind"] for e in c.get("/events?limit=50").json() if e["job_id"] == jid]
+    assert "replay.dry" in kinds and "Replay" not in r.json()["summary"]
