@@ -1,10 +1,11 @@
-# Render blueprint: New + Blueprint, pick this repo. Free plan is fine for the day.
+# Render blueprint: New + Blueprint, pick this repo. Starter plan (not free): free cannot mount a
+# disk and spins down after 15 min idle, which kills the Stripe poller and cold-starts Terac raters.
 # Secrets are entered in the Render dashboard (sync: false), never here.
 services:
   - type: web
     name: reality-check
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -e .
     startCommand: uvicorn reality_check.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /ledger
