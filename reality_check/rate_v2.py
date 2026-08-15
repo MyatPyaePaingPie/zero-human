@@ -110,8 +110,9 @@ def stimulus(job: dict) -> list[dict]:
     if by_kind.get("repo"):
         # the README first paragraph rides along whenever a repo was given (last, so page/deck lead)
         s = by_kind["repo"]
+        # the repo link is the GitHub URL as submitted; older rows stored the README's live link
         out.append({"kind": "repo", "label": _LABELS["repo"], "text": s["first_screen"],
-                    "link": s.get("link") or s.get("ref") or "", "link_label": _LINK_LABELS["repo"]})
+                    "link": s.get("ref") or s.get("link") or "", "link_label": _LINK_LABELS["repo"]})
     return out
 
 
