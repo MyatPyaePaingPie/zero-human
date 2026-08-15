@@ -154,7 +154,7 @@ def test_agentready_folded_into_probes_run():
         return {"failing": ["protocolDiscovery"], "passing": []}
 
     res = probes.run(root, fetcher=fetcher, resolver=_resolver_ok, agentready_poster=poster)
-    assert res["agentready"]["failing"] == ["protocolDiscovery"]
+    assert [f["category"] for f in res["agentready"]["failing"]] == ["protocolDiscovery"]
     assert any(f["id"] == "agentready/protocolDiscovery-failing" for f in res["findings"])
 
 
