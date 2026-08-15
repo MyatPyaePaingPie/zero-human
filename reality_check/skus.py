@@ -5,6 +5,8 @@ demand_check rubric is the money-swarm demand-to-build gate verbatim; verified_a
 """
 from __future__ import annotations
 
+from reality_check import lenses
+
 SKUS: dict[str, dict] = {
     "reality_check": {
         "price_usd": 8.0,
@@ -44,11 +46,13 @@ SKUS: dict[str, dict] = {
 # clarity (do strangers get it), demand (money-swarm demand-to-build gate), autonomy (the team's
 # own claims, appended at request time), economics (what evidence cost and what the router refused;
 # comes from the ledger, not a claim).
+_RUBRIC = lenses.claims_for_run()   # single source of truth: reality_check/lenses.py run order
+
 SKUS["full_reality_check"] = {
     "price_usd": 25.0,
     "evidence_standard": "human_backed",
-    "claims": SKUS["reality_check"]["claims"] + SKUS["demand_check"]["claims"],
-    "lenses": ["clarity"] + ["demand"] * len(SKUS["demand_check"]["claims"]),
+    "claims": [c.text for c, _l, _i in _RUBRIC],
+    "lenses": [l for _c, l, _i in _RUBRIC],
     "personas": ["buyer", "operator", "skeptic", "outsider", "designer"],
     "human_question": "Read it as a stranger. For each line say yes or no. Then one sentence: what is this, and would you pay?",
 }

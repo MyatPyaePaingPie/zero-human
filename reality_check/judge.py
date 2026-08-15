@@ -15,7 +15,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 
-from reality_check import evaluators, linq_client, panels, probes, replay_client, skus, store
+from reality_check import evaluators, lenses, linq_client, panels, probes, replay_client, skus, store
 from reality_check.core import consensus, voi
 from reality_check.core.brier import brier
 from reality_check.core.models import ClaimVerdict, JudgeRequest, Verdict, VoiDecision
@@ -50,19 +50,56 @@ def _majority(yes: int, no: int) -> tuple[str, float]:
 
 def _judge_claim(idx: int, claim: str, text: str, personas: list[str] | None) -> tuple[dict, float]:
     ev = evaluators.evaluate(claim, text, personas)
+    return _claim_row(idx, claim, ev), ev.cost_usd
+
+
+def _claim_row(idx: int, claim: str, ev, *, lens: str = "custom", claim_id: str = "", mode: str = "model") -> dict:
+    """One stored claim: its votes, its consensus, and what backs it. Objective claims (ev None)
+    carry no evaluators and no model consensus at all -- `side: unknown`, evidence_state `none`
+    until probes speak. A model opinion is not evidence about a live site."""
+    if ev is None:
+        return {"idx": idx, "claim": claim, "lens": lens, "claim_id": claim_id, "mode": mode,
+                "evidence_state": "none", "evaluators": [],
+                "consensus": {"side": "unknown", "p": 0.5, "agreement": 0.0, "dissent": 0.0,
+                              "rationale": "objective claim: no evidence yet (give a live URL)"},
+                "provider": "none"}
     cv = consensus.evaluate(ev.votes)
     p_internal = cv.agreed_p if cv.side != "skip" else 0.5
     n_active = len(cv.voters_for) + len(cv.voters_against)
     agreement = len(cv.voters_for) / n_active if n_active else 0.0
     dissent = max(0.0, min(1.0, (1.0 - agreement) + (0.5 if cv.side == "skip" else 0.0)))
     return {
-        "idx": idx, "claim": claim,
+        "idx": idx, "claim": claim, "lens": lens, "claim_id": claim_id, "mode": mode,
+        "evidence_state": "model",
         "evaluators": [{"id": v.hypothesis_id, "p": v.forecast.p, "confidence": v.forecast.confidence,
                         "reasoning": v.forecast.reasoning, "refuted_by": v.forecast.refuted_by, "side": v.forecast.side}
                        for v in ev.votes],
         "consensus": {"side": cv.side, "p": p_internal, "agreement": agreement, "dissent": dissent, "rationale": cv.rationale},
         "provider": ev.provider,
-    }, ev.cost_usd
+    }
+
+
+def _judge_rubric(req: JudgeRequest) -> tuple[list[dict], float, list[str]]:
+    """Full Reality Check: the run order in lenses.py IS the claim list (disabled lenses are not
+    in the run at all). One batched model call per persona per lens with model/both claims;
+    objective claims cost zero model calls and wait for probes."""
+    rubric = lenses.claims_for_run(extra_claims=req.extra_claims)
+    rows: list[dict | None] = [None] * len(rubric)
+    cost = 0.0
+    by_lens: dict[str, list[int]] = {}
+    for i, (c, lens_name, cid) in enumerate(rubric):
+        if c.mode == "objective":
+            rows[i] = _claim_row(i, c.text, None, lens=lens_name, claim_id=cid, mode=c.mode)
+        else:
+            by_lens.setdefault(lens_name, []).append(i)
+    for lens_name, idxs in by_lens.items():
+        personas = req.personas or lenses.personas_for(lens_name)
+        results = evaluators.evaluate_batch([rubric[i][0].text for i in idxs], req.input, personas)
+        for i, ev in zip(idxs, results):
+            c, _l, cid = rubric[i]
+            rows[i] = _claim_row(i, c.text, ev, lens=lens_name, claim_id=cid, mode=c.mode)
+            cost += ev.cost_usd
+    return [r for r in rows if r is not None], cost, [c.text for c, _l, _i in rubric]
 
 
 HUMAN_ARMS = ("linq_panel", "terac_general", "terac_expert")   # recruiting arms, cheapest first
@@ -129,13 +166,20 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
         store.ledger_add_once(job_id, "revenue", paid_usd, f"{req.sku} sold")
 
     personas = req.personas or skus.default_personas(req.sku)
-    claims, cost = [], 0.0
-    for i, claim in enumerate(req.claims):
-        c, cst = _judge_claim(i, claim, req.input, personas)
-        claims.append(c)
-        cost += cst
+    if req.sku == "full_reality_check":
+        claims, cost, texts = _judge_rubric(req)
+        if texts != req.claims:
+            # keep the stored request index-aligned with the rubric: /rate renders request["claims"]
+            req.claims = texts
+            store.put_job(job_id, req.buyer_id, "evaluating", req.model_dump(), {})
+    else:
+        claims, cost = [], 0.0
+        for i, claim in enumerate(req.claims):
+            c, cst = _judge_claim(i, claim, req.input, personas)
+            claims.append(c)
+            cost += cst
     if cost:
-        store.ledger_add(job_id, "cost.ensemble", cost, claims[0]["provider"])
+        store.ledger_add(job_id, "cost.ensemble", cost, next((c["provider"] for c in claims if c["evaluators"]), "none"))
     worst = max(claims, key=lambda c: c["consensus"]["dissent"])
     store.event(job_id, "evaluators.done", {"claims": [(c["consensus"]["side"], round(c["consensus"]["p"], 2), round(c["consensus"]["dissent"], 2)) for c in claims], "cost": cost})
 
@@ -309,7 +353,9 @@ def verdict(job_id: str) -> Verdict:
     cvs = [_claim_verdict(c, by_claim.get(c["idx"], [])) for c in st.get("claims", [])]
     lens_names = skus.lenses_for(job["request"].get("sku", "custom"), len(cvs))
     for cv, c, ln in zip(cvs, st.get("claims", []), lens_names):
-        cv.lens = ln
+        cv.lens = c.get("lens") or ln
+        cv.claim_id = c.get("claim_id") or lenses.claim_id(cv.lens, cv.claim)
+        cv.evidence_state = "human" if cv.n_humans else c.get("evidence_state", "model")
         j = (st.get("replay") or {}).get("journeys", {}).get(str(c["idx"]))
         if j:
             cv.objective = {"source": "replay_qa", "journey_id": j["journey_id"], "result": j.get("result"), "bugs": j.get("bugs", [])}
@@ -329,11 +375,14 @@ def verdict(job_id: str) -> Verdict:
                 cv.verdict = "no" if failing else "yes"
                 cv.p_internal = 0.05 if failing else 0.95
                 cv.objective = {"source": "probes", "failing": [f["id"] for f in failing], "evidence": [f["evidence"] for f in failing]}
+                if cv.evidence_state != "human":
+                    cv.evidence_state = "probe"
     n_humans = len(by_claim.get(0, []))
     if not cvs:
         return Verdict(job_id=job_id, status=job["status"], verdict="undecided", p=0.5, confidence=0.0, agreement=0.0,
                        n_evaluators=0, n_humans=0, summary="evaluating", minority_view="")
-    all_skipped = all(e["side"] == "skip" for c in st.get("claims", []) for e in c["evaluators"])
+    voted = [e for c in st.get("claims", []) for e in c["evaluators"]]
+    all_skipped = bool(voted) and all(e["side"] == "skip" for e in voted)
     passed = sum(1 for v in cvs if v.verdict == "yes")
     overall = "yes" if passed == len(cvs) else "no" if any(v.verdict == "no" for v in cvs) else "undecided"
     p = sum(v.p_humans if v.p_humans is not None else v.p_internal for v in cvs) / len(cvs)
@@ -357,7 +406,7 @@ def verdict(job_id: str) -> Verdict:
         summary = "Model evaluators unavailable (provider errors); humans are the only evidence. " + summary
     minority = next((v.minority_view for v in cvs if v.minority_view), "")
     tot = _job_money(job_id)
-    n_eval = len(st["claims"][0]["evaluators"]) if st.get("claims") else 0
+    n_eval = max((len(c["evaluators"]) for c in st.get("claims", [])), default=0)
     all_answers = store.human_answers(job_id)
     return Verdict(
         job_id=job_id, status=job["status"], verdict=overall, p=round(p, 3),

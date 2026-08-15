@@ -172,10 +172,15 @@ def test_full_reality_check_bundle_lenses():
                                "extra_claims": ["A user can pay and receive the roast without a human"]}, headers={"X-RC-Paid": "25"})
     assert r.status_code == 200, r.text
     v = r.json(); jid = v["job_id"]
-    lenses = [x["lens"] for x in v["claims"]]
-    assert lenses == ["clarity"] + ["demand"] * 6 + ["autonomy"] and v["status"] == "awaiting_humans"
+    # the claim list is lenses.run_order() now, not a hand-built clarity+demand list (issue #2/#18)
+    from reality_check import lenses as L
+    seen = [x["lens"] for x in v["claims"]]
+    assert seen == [l for _c, l, _i in L.claims_for_run(extra_claims=["A user can pay and receive the roast without a human"])]
+    assert v["status"] == "awaiting_humans"
     page = c.get(f"/verdict/{jid}").text
-    assert "clarity" in page and "demand" in page and "autonomy" in page and "economics" in page
+    assert "clarity" in page and "demand" in page and "autonomy" in page and "viability" in page
+    # (the page's own "economics" money block is not a lens block; disabled lenses have no claims)
+    assert "economics" not in seen and "projections" not in seen and "competition" not in seen
 
 
 def test_unpaid_request_cannot_spend_and_revenue_once():

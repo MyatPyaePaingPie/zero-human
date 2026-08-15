@@ -83,6 +83,10 @@ class ClaimVerdict(BaseModel):
     minority_view: str = ""
     objective: dict | None = Field(default=None, description="Replay QA journey evidence for flow claims: {result, bugs, journey_id}.")
     lens: str = "custom"
+    claim_id: str = Field(default="", description="Stable `<lens>/<slug>` id; the agent report (#4) keys findings on it.")
+    evidence_state: Literal["none", "probe", "model", "human"] = Field(
+        default="model", description="What actually backs this verdict. 'none' = objective claim with no probe run yet: "
+        "render as 'no evidence yet: give a live URL', never as a model opinion.")
 
 
 class VoiDecision(BaseModel):
