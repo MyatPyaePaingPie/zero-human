@@ -2,7 +2,7 @@
 # Local runner: secrets from the macOS keychain (service name == env var name), never from files.
 set -euo pipefail
 cd "$(dirname "$0")"
-for name in REPLAY_API_KEY ZEROHUMAN_STRIPE_RESTRICTED_KEY ZEROHUMAN_STRIPE_PUBLISHABLE_KEY TERAC_API_KEY GROQ_API_KEY OPENAI_API_KEY RC_ENVELOPE_SECRET; do
+for name in REPLAY_API_KEY RC_PAYLINK_DEFAULT ZEROHUMAN_STRIPE_WRITE_KEY ZEROHUMAN_STRIPE_RESTRICTED_KEY ZEROHUMAN_STRIPE_PUBLISHABLE_KEY TERAC_API_KEY GROQ_API_KEY OPENAI_API_KEY RC_ENVELOPE_SECRET; do
   if [ -z "${!name:-}" ]; then
     if v="$(security find-generic-password -s "$name" -w 2>/dev/null)"; then export "$name=$v"; else echo "run.sh: $name not in keychain (continuing)" >&2; fi
   fi

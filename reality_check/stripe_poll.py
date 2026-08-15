@@ -54,9 +54,9 @@ def _loop(key: str, every: float, limit: int) -> None:
 
 def start_background() -> bool:
     global _thread
-    key = os.environ.get("ZEROHUMAN_STRIPE_RESTRICTED_KEY", "")
+    key = os.environ.get("ZEROHUMAN_STRIPE_RESTRICTED_KEY") or os.environ.get("ZEROHUMAN_STRIPE_WRITE_KEY", "")
     if not key:
-        store.event(None, "stripe.poll.off", {"reason": "no ZEROHUMAN_STRIPE_RESTRICTED_KEY"})
+        store.event(None, "stripe.poll.off", {"reason": "no ZEROHUMAN_STRIPE_RESTRICTED_KEY / ZEROHUMAN_STRIPE_WRITE_KEY"})
         return False
     if _thread and _thread.is_alive():
         return True
