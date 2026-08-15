@@ -24,6 +24,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from reality_check import before_after, intake, judge, linq_client, report, skus, store, stripe_poll, stripe_webhook, sweep, terac_client
@@ -66,7 +67,9 @@ async def post_judge(request: Request) -> Verdict:
         raise HTTPException(422, str(exc))
     job_id = uuid.uuid4().hex[:12]
     protocol.record(job_id, adm)
-    return judge.start(req, paid_usd=adm.paid_usd, job_id=job_id)
+    # judge.start blocks for the whole model run (tens of seconds); off the event loop or the
+    # health check times out and Render restarts the instance mid-job (seen live 20:17 UTC)
+    return await run_in_threadpool(judge.start, req, paid_usd=adm.paid_usd, job_id=job_id)
 
 
 @app.post("/intake", response_model=Verdict)
@@ -77,7 +80,7 @@ async def post_intake(request: Request) -> Verdict:
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     req.paid_usd = adm.paid_usd
-    return intake.submit(req)
+    return await run_in_threadpool(intake.submit, req)
 
 
 @app.post("/intake/{job_id}/redeploy")
