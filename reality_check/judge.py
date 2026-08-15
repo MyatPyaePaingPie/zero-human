@@ -163,11 +163,13 @@ def _probe_check_ids(claim_text: str) -> tuple[str, ...] | None:
     return None
 
 
-def _resolve_sources(req: JudgeRequest) -> dict | None:
+def _resolve_sources(req: JudgeRequest, *, force: bool = False) -> dict | None:
     """One box, three inputs (#20): repo README+manifests, landing page copy, deck slides are read
     (SSRF-guarded, budgeted) and merged into req.input with source markers; the page URL, else the
     README's live link, else a slide link becomes req.url so probes have a target."""
-    if not (req.repo or req.deck or (req.url and not req.input.strip())):
+    if not force and not (req.repo or req.deck or (req.url and not req.input.strip())):
+        return None
+    if not (req.repo or req.deck or req.url):
         return None
     from reality_check import sources
     norm = sources.normalize(repo=req.repo, page=req.url, deck=req.deck, pitch=req.input.strip() or None)
@@ -362,7 +364,7 @@ def reset_sources(job_id: str, *, repo: str | None = None, deck: str | None = No
     if url is not None:
         req.url = url or None
     req.input = req.input if not req.input.startswith("===") else ""   # drop the previous merged bundle
-    src = _resolve_sources(req)
+    src = _resolve_sources(req, force=True)
     if src:
         store.patch_job_state(job_id, "sources", src)
     store.update_request(job_id, req.model_dump())
