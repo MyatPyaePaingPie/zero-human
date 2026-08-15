@@ -3,29 +3,40 @@
 :root{--paper:#fbfaf7;--ink:#17181a;--muted:#5d5f66;--rule:#d9d6cf;--card:#f2f0ea;--accent:#1c4fd6;--good:#1f7a3f;--warn:#b7791f;--bad:#b3261e;--code:#eeece6}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#15161a;--ink:#ecebe6;--muted:#a3a49f;--rule:#34363c;--card:#1e2025;--accent:#7ea2ff;--good:#5ccb84;--warn:#e2b04a;--bad:#f0756a;--code:#24262c}}
 :root[data-theme="dark"]{--paper:#15161a;--ink:#ecebe6;--muted:#a3a49f;--rule:#34363c;--card:#1e2025;--accent:#7ea2ff;--good:#5ccb84;--warn:#e2b04a;--bad:#f0756a;--code:#24262c}
-body{background:var(--paper);color:var(--ink);font:15px/1.5 "Helvetica Neue",Helvetica,Arial,sans-serif;margin:0;padding:32px 16px}
-h1,h2,h3{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;text-wrap:balance;margin:0}
-.wrap{max-width:860px;margin:0 auto;display:grid;gap:40px}
-.intro{max-width:65ch}.intro p{color:var(--muted)}
-.page{border:1px solid var(--rule);background:var(--paper);padding:36px 40px;display:grid;gap:22px;position:relative}
-.page::before{content:attr(data-page);position:absolute;top:10px;right:14px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+*,*::before,*::after{box-sizing:border-box}
+html,body{width:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.55 "Helvetica Neue",Helvetica,Arial,sans-serif;padding:40px 20px 80px;display:flex;justify-content:center}
+h1,h2,h3{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;text-wrap:balance;margin:0;font-weight:600}
+.wrap{width:100%;max-width:900px;display:flex;flex-direction:column;gap:48px}
+.intro{max-width:70ch;display:flex;flex-direction:column;gap:12px}.intro p{color:var(--muted);margin:0}
+.page{border:1px solid var(--rule);background:var(--paper);padding:44px 48px;display:flex;flex-direction:column;gap:26px;position:relative;box-shadow:0 1px 0 var(--rule)}
+@media(max-width:640px){.page{padding:28px 20px}}
+.page::before{content:attr(data-page);position:absolute;top:14px;right:18px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-h1{font-size:34px;line-height:1.1}h2{font-size:22px}h3{font-size:16px}
+h1{font-size:36px;line-height:1.1}h2{font-size:24px;padding-top:6px}h3{font-size:17px}
+p{margin:0}
 .stamps{display:flex;gap:12px;flex-wrap:wrap}
 .stamp{border:2px solid;padding:8px 14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:13px}
 .good{color:var(--good);border-color:var(--good)}.warn{color:var(--warn);border-color:var(--warn)}.bad{color:var(--bad);border-color:var(--bad)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:640px){.grid2{grid-template-columns:1fr}}
-.card{background:var(--card);padding:14px 16px;display:grid;gap:6px}
+.card{background:var(--card);padding:16px 18px;display:flex;flex-direction:column;gap:8px}
 .card .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--rule);vertical-align:top}th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:14px}@media(max-width:640px){.checks{grid-template-columns:1fr}}
+.checks div{display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px dotted var(--rule);padding:4px 0}
+.subs{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}.subs span{white-space:nowrap}
 .tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td:first-child{white-space:nowrap}
 code,.id{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--accent)}
-.pill{display:inline-block;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:700}
+.pill{display:inline-block;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:700;white-space:nowrap;line-height:1.5}
 .p-good{background:var(--good);color:#fff}.p-warn{background:var(--warn);color:#fff}.p-bad{background:var(--bad);color:#fff}.p-na{background:var(--rule);color:var(--ink)}
-ol,ul{margin:0;padding-left:20px}li{margin:4px 0}
-.foot{border-top:1px solid var(--rule);padding-top:10px;font-size:12px;color:var(--muted)}
-pre{background:var(--code);padding:18px 20px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);margin:0}
+ol,ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.foot{border-top:1px solid var(--rule);padding-top:12px;font-size:12px;color:var(--muted);line-height:1.5}
+pre{background:var(--code);padding:20px 22px;overflow-x:auto;font:13px/1.55 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);margin:0}
 .note{font-size:13px;color:var(--muted)}
+.mdsec{display:flex;flex-direction:column;gap:14px}
 </style>
 <div class="wrap">
 <div class="intro">
@@ -43,11 +54,19 @@ pre{background:var(--code);padding:18px 20px;overflow-x:auto;font:13px/1.5 ui-mo
 <div class="card"><div class="k">Do these three before you submit</div><ol><li>&lt;highest-leverage fix, names the slide/screen/file&gt;</li><li>&lt;second&gt;</li><li>&lt;third&gt;</li></ol></div>
 <div class="card"><div class="k">3 strangers from Terac's network read it</div><div>Blind, general population, answered in &lt;12&gt; min.<br>Could say what it does: <b>2 of 3</b>. Would pay: <b>1 of 3</b>.<br>"I thought it was for developers." · "Where is the price?"<br><span class="note">Read: README + 2 manifests · 12 slides · landing page.</span></div></div>
 </div>
-<div class="card"><div class="k">Submission checklist (guidebook p.14-15, 27-31; miss one = ineligible for main prizes)</div><div>Terac MCP with real human input + before/after <span class="pill p-warn">partial</span> · personal Stripe account <span class="pill p-good">yes</span> · ONE Payment Link used everywhere <span class="pill p-good">yes</span> · rk_ read-only key created and submitted <span class="pill p-na">confirm</span> · project submitted via the guidebook link before lock <span class="pill p-na">not yet</span> · studies to General Population <span class="pill p-good">yes</span></div></div>
+<div class="card"><div class="k">Submission checklist (guidebook p.14-15, 27-31; miss one = ineligible for main prizes)</div>
+<div class="checks">
+<div><span>Terac MCP, real human input, before/after</span><span class="pill p-warn">partial</span></div>
+<div><span>Personal Stripe account</span><span class="pill p-good">yes</span></div>
+<div><span>One Payment Link used everywhere</span><span class="pill p-good">yes</span></div>
+<div><span>rk_ read-only key created and submitted</span><span class="pill p-na">confirm</span></div>
+<div><span>Submitted via guidebook link before lock</span><span class="pill p-na">not yet</span></div>
+<div><span>Studies target General Population</span><span class="pill p-good">yes</span></div>
+</div></div>
 <h2>Sponsor tracks</h2>
 <div class="tw"><table><tr><th>Track</th><th>Prize</th><th>Status</th><th>Evidence / what is missing</th></tr>
-<tr><td><b>Terac (host, required)</b></td><td>rule + Best Overall</td><td><span class="pill p-warn">partial</span></td><td>recruits via MCP <span class="pill p-good">yes</span> · general population <span class="pill p-good">yes</span> · people respond to a real artifact <span class="pill p-good">yes</span> · before/after with a number <span class="pill p-bad">missing</span> · what humans receive is short and concrete <span class="pill p-warn">3 pages, cut to 1</span></td></tr>
-<tr><td><b>Stripe (required)</b></td><td>rule + Agent-Run Company</td><td><span class="pill p-warn">partial</span></td><td>one Payment Link on page <span class="pill p-good">yes</span> · personal account <span class="pill p-good">yes</span> · rk_ read-only key (Balance+Charges) submitted <span class="pill p-na">unknown, confirm</span> · revenue number in pitch <span class="pill p-bad">missing</span></td></tr>
+<tr><td><b>Terac (host, required)</b></td><td>rule + Best Overall</td><td><span class="pill p-warn">partial</span></td><td><div class="subs"><span>recruits via MCP <span class="pill p-good">yes</span></span><span>general population <span class="pill p-good">yes</span></span><span>real artifact <span class="pill p-good">yes</span></span><span>before/after number <span class="pill p-bad">missing</span></span><span>brief is short <span class="pill p-warn">cut to 1 page</span></span></div></td></tr>
+<tr><td><b>Stripe (required)</b></td><td>rule + Agent-Run Company</td><td><span class="pill p-warn">partial</span></td><td><div class="subs"><span>one Payment Link <span class="pill p-good">yes</span></span><span>personal account <span class="pill p-good">yes</span></span><span>rk_ key submitted <span class="pill p-na">confirm</span></span><span>revenue number in pitch <span class="pill p-bad">missing</span></span></div></td></tr>
 <tr><td>Linq</td><td>$1,500 / $1,000</td><td><span class="pill p-warn">claimed, not evidenced</span></td><td>deck says "texts customers"; no linqapp in repo or page. Their bar: tapback = vote, typing = loading, group thread = lobby, vertical-specific</td></tr>
 <tr><td>Replay</td><td>$1,000 / $500</td><td><span class="pill p-bad">not used</span></td><td>cheapest add: run qa.replay.io on your URL, paste fixes, show clean report</td></tr>
 <tr><td>Render</td><td>$500 credits</td><td><span class="pill p-warn">hosted, no Workflows</span></td><td>onrender.com live; track requires Render Workflows</td></tr>
@@ -92,7 +111,7 @@ pre{background:var(--code);padding:18px 20px;overflow-x:auto;font:13px/1.5 ui-mo
 <div class="foot">Evidence: sources read, personas, human responses and timing, probe observations. Re-run: submit the same links at &lt;base&gt;/. Reality Check by zero-human, job &lt;job_id&gt;.</div>
 </section>
 
-<section>
+<section class="mdsec">
 <h2>agent.md (same data, for the team's coding agent)</h2>
 <pre># Reality Check: &lt;Project name&gt;  (job &lt;job_id&gt;)
 Hackathon: FIXABLE BY 18:30   Business: NOT YET
