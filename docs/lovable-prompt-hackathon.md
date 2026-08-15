@@ -1,5 +1,12 @@
 # Lovable build brief: Reality Check landing page (hackathon pivot, 2026-08-15)
 
+> **SUPERSEDED in part (13:31, `docs/specs/text-intake.md`): the form is no longer the intake.**
+> The product is texting the Linq line (+1 415 577 0605). The Lovable page shrinks to: the hero
+> headline, one line — "Text +1 415 577 0605 with your repo, slides, or landing page" — the three
+> stamps preview, the live counter, and the paid path (the $8/$25 SKU cards linking to the Stripe
+> Payment Links) for after today. Drop the form and the /r/:jobId flow; report URLs arrive by text.
+> Design direction and "do not" rules below still apply.
+
 Supersedes `lovable-prompt.md` (pre-pivot). The product changed at 14:05: three links in,
 four-page PDF + agent.md out. This is the brief for the page a team opens from the room QR.
 
