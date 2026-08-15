@@ -265,3 +265,18 @@ def test_admin_humans_switch_requires_token_and_launches_for_one_job(monkeypatch
     from reality_check import store
     job = store.get_job(jid)
     assert job["status"] == "awaiting_humans" and job["state"]["operator"] == "aria" and job["state"]["panel"]["external_id"] == "opp_123"
+
+
+def test_admin_reset_sources_updates_request_and_state(monkeypatch):
+    from reality_check import judge as judge_module, sources as sources_module, store
+    monkeypatch.setenv("RC_ENVELOPE_SECRET", "op-secret")
+    monkeypatch.setattr(judge_module, "_launch_probes", lambda job_id, url: None)
+    monkeypatch.setattr(judge_module, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.setattr(sources_module, "normalize", lambda **kw: {"text": "=== PAGE x ===\nAcme rockets hero", "live_url": kw.get("page"),
+        "source_kinds": ["page"], "primary_kind": "page", "warnings": [], "sources": [{"kind": "page", "ref": kw.get("page"), "text": "Acme rockets hero", "live_url": kw.get("page"), "meta": {"title": "Acme"}}]})
+    v = c.post("/judge", json={"input": "Acme sells rockets", "sku": "reality_check", "evidence_standard": "voi_routed", "max_budget_usd": 0}).json()
+    r = c.post(f"/admin/sources/{v['job_id']}", json={"url": "https://acme.example"}, headers={"X-RC-Admin": "op-secret"})
+    assert r.status_code == 200, r.text
+    job = store.get_job(v["job_id"])
+    assert job["request"]["url"] == "https://acme.example" and job["state"]["sources"]["source_kinds"] == ["page"]
+    assert job["state"]["sources"]["sources"][0]["first_screen"]

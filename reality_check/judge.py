@@ -348,6 +348,31 @@ def launch_humans(job_id: str, *, arm: str = "terac_general", n: int = 3, author
     return {"job_id": job_id, "launched": True, "panel": st["panel"]}
 
 
+def reset_sources(job_id: str, *, repo: str | None = None, deck: str | None = None, url: str | None = None) -> dict:
+    """Operator: attach or replace the sources of an existing job (repo/deck/page), re-read them,
+    re-run probes and the rubric. The stored request is updated so /rate and the report see them."""
+    job = store.get_job(job_id)
+    if not job:
+        raise KeyError(job_id)
+    req = JudgeRequest(**job["request"])
+    if repo is not None:
+        req.repo = repo or None
+    if deck is not None:
+        req.deck = deck or None
+    if url is not None:
+        req.url = url or None
+    req.input = req.input if not req.input.startswith("===") else ""   # drop the previous merged bundle
+    src = _resolve_sources(req)
+    if src:
+        store.patch_job_state(job_id, "sources", src)
+    store.update_request(job_id, req.model_dump())
+    store.event(job_id, "sources.reset", {"repo": req.repo, "deck": req.deck, "url": req.url, "kinds": (src or {}).get("source_kinds")})
+    if req.url:
+        _launch_probes(job_id, req.url)
+    _launch_hackathon(job_id, req.input, has_repo=bool(req.repo))
+    return {"job_id": job_id, "sources": src, "url": req.url}
+
+
 def _notify(job_id: str) -> None:
     """Text the buyer once per job when it settles (Linq), if they asked."""
     job = store.get_job(job_id)

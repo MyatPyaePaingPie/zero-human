@@ -262,6 +262,18 @@ def admin_launch_humans(job_id: str, request: Request, body: dict) -> dict:
         raise HTTPException(404, "no such job")
 
 
+@app.post("/admin/sources/{job_id}")
+def admin_reset_sources(job_id: str, request: Request, body: dict) -> dict:
+    """Operator: attach/replace repo, deck, url on an existing job and re-run sources+probes+rubric."""
+    secret = os.environ.get("RC_ENVELOPE_SECRET", "")
+    if not secret or request.headers.get("x-rc-admin", "") != secret:
+        raise HTTPException(403, "operator token required")
+    try:
+        return judge.reset_sources(job_id, repo=body.get("repo"), deck=body.get("deck"), url=body.get("url"))
+    except KeyError:
+        raise HTTPException(404, "no such job")
+
+
 def _report(job_id: str) -> dict:
     try:
         return report.build(job_id)

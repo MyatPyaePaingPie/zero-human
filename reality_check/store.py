@@ -85,6 +85,13 @@ def patch_job_state(job_id: str, key: str, value) -> None:
         c.execute("UPDATE jobs SET updated_at=?, state=? WHERE job_id=?", (now(), json.dumps(state), job_id))
 
 
+def update_request(job_id: str, request: dict) -> None:
+    """put_job's upsert never touches `request` (orders must not be rewritten by later state writes);
+    operator source resets are the one place that legitimately changes it."""
+    with _lock, conn() as c:
+        c.execute("UPDATE jobs SET updated_at=?, request=? WHERE job_id=?", (now(), json.dumps(request), job_id))
+
+
 def get_job(job_id: str) -> dict | None:
     with conn() as c:
         r = c.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
