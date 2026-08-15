@@ -49,6 +49,24 @@ HACKATHON_FIXTURE = {
     ],
     "stamp": "fixable_by_1830",
     "top3": ["Add revenue number to slide 1", "Fix README run steps", "Name the payer on the hero"],
+    "autonomy": [
+        {"id": "auto/spend-authority", "title": "Who holds the money?", "failure": "budget in a prompt",
+         "status": "fail", "score": 0.1, "why": "limit lives in the system prompt", "fix": "move limit to config"},
+        {"id": "auto/idempotent-money", "title": "Fires exactly once", "failure": "double charge",
+         "status": "partial", "score": 0.5, "why": "no idempotency key found", "fix": "key fulfillment by session id"},
+        {"id": "auto/decision-quality", "title": "Measured vs doing nothing", "failure": "no baseline",
+         "status": "pass", "score": 0.9, "why": "blind then revealed", "fix": ""},
+        {"id": "auto/liveness", "title": "Someone notices it stopped", "failure": "no health check",
+         "status": "pass", "score": 0.8, "why": "canary exists", "fix": ""},
+        {"id": "auto/authority-boundary", "title": "Customer text is not authority", "failure": "chat -> refund",
+         "status": "pass", "score": 0.85, "why": "refunds need a rule", "fix": ""},
+        {"id": "auto/human-loop-design", "title": "Human where agents cannot decide", "failure": "n/a",
+         "status": "pass", "score": 0.95, "why": "taste judged by humans, priced", "fix": ""},
+        {"id": "auto/ledger", "title": "Append-only truth", "failure": "overwritten orders",
+         "status": "pass", "score": 0.9, "why": "orders table overwritten", "fix": "append events"},
+    ],
+    "autonomy_stamp": "human_in_the_loop",
+    "autonomy_note": "Graded against failure modes from two autonomous systems we built and ran ourselves.",
 }
 
 
@@ -91,7 +109,7 @@ def test_build_has_required_fields_on_every_finding():
     store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
     rep = report.build(jid)
     assert rep["job"] == jid
-    assert set(rep["stamps"]) == {"hackathon", "business"}
+    assert set(rep["stamps"]) == {"hackathon", "business", "autonomous"}
     assert rep["stamps"]["hackathon"] == "fixable_by_1830"
     assert rep["top3"]
     business = [f for f in rep["findings"] if "gap" in f]
@@ -195,3 +213,70 @@ def test_report_routes(monkeypatch):
     p = c.get(f"/report/{jid}.pdf"); assert p.status_code == 200
     assert p.content.startswith(b"%PDF") or "<table" in p.text
     assert c.get("/report/nope.json").status_code == 404
+
+
+def test_autonomy_k_hold_count():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    assert rep["autonomy"]["k_hold"] == 5
+    assert rep["autonomy"]["n"] == 7
+    assert rep["autonomy"]["stamp"] == "human_in_the_loop"
+    assert rep["stamps"]["autonomous"] == "human_in_the_loop"
+
+
+def test_html_page3_autonomy_table_has_plain_text():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    doc = report.to_html(rep)
+    assert "Can this run autonomously" in doc
+    # plain text for the failing item is pulled from the real rubric (hackathon.load_rubric()),
+    # not the fixture -- prove the row explainer is present and non-empty
+    plain = rep["autonomy"]["items"][0]["plain"]
+    assert plain and plain in doc
+
+
+def test_agent_md_autonomy_section_present():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    md = report.to_agent_md(rep)
+    assert "## Can it run autonomously" in md
+    assert "### auto/spend-authority [fail]" in md
+
+
+def test_evidence_public_line_only_under_failed_or_partial_items():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    doc = report.to_html(rep)
+    fail_item = next(i for i in rep["autonomy"]["items"] if i["id"] == "auto/spend-authority")
+    assert fail_item["status"] == "fail"
+    ev = fail_item["evidence_public"][0]
+    assert ev["what"] in doc
+    pass_item = next(i for i in rep["autonomy"]["items"] if i["id"] == "auto/ledger")
+    assert pass_item["status"] == "pass"
+    # a passing item's evidence_public text must not leak onto the page
+    if pass_item.get("evidence_public"):
+        assert pass_item["evidence_public"][0]["what"] not in doc
+
+
+def test_autonomy_absent_on_older_jobs_tolerated():
+    # simulate a job settled before the autonomy rubric shipped: state.hackathon exists
+    # (the parallel lane's background evaluation already ran) but carries no "autonomy" key.
+    jid = _make_job()
+    _settle(jid)
+    old_hackathon = {k: v for k, v in HACKATHON_FIXTURE.items() if k not in ("autonomy", "autonomy_stamp", "autonomy_note")}
+    store.patch_job_state(jid, "hackathon", old_hackathon)
+    rep = report.build(jid)
+    assert rep["autonomy"] is None
+    assert rep["stamps"]["autonomous"] == "not_run"
+    doc = report.to_html(rep)
+    assert "autonomy rubric not run" in doc
+    md = report.to_agent_md(rep)
+    assert "## Can it run autonomously" not in md

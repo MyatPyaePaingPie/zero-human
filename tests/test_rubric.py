@@ -68,7 +68,8 @@ class _FakeClient:
 
     def post(self, url, json=None, headers=None):  # noqa: A002
         _FakeClient.posts.append({"url": url, "body": json})
-        n = len(json["messages"][1]["content"].split("CLAIMS:\n", 1)[1].split("\n\nINPUT")[0].splitlines())
+        body_text = json["messages"][1]["content"]
+        n = len(body_text.split("):\n", 1)[1].split("\n\nINPUT")[0].splitlines())
         items = []
         for i in range(n):
             if i == 1:
@@ -90,14 +91,15 @@ def test_batch_makes_one_post_per_persona_and_malformed_idx_only_skips_itself(mo
     personas = ["skeptic", "operator"]
     out = evaluators.evaluate_batch(claims, "input text", personas)
 
-    assert len(_FakeClient.posts) == len(personas), "one call per persona for the whole claim list"
+    # one call per persona for the whole list, plus one repair call per persona for the unanswered
+    # claim (the fake returns a non-numeric idx for claim 1, i.e. no usable answer)
+    assert len(_FakeClient.posts) == 2 * len(personas)
+    repair_posts = [p for p in _FakeClient.posts if "CLAIMS (1):" in p["body"]["messages"][1]["content"]]
+    assert len(repair_posts) == len(personas)
     assert len(out) == len(claims)
     for i, r in enumerate(out):
         sides = [v.forecast.side for v in r.votes]
-        if i == 1:
-            assert sides == ["skip", "skip"] and all("error" in v.forecast.reasoning for v in r.votes)
-        else:
-            assert sides == ["yes", "yes"] and r.votes[0].forecast.p == 0.8
+        assert sides == ["yes", "yes"] and r.votes[0].forecast.p == 0.8
     assert sum(r.cost_usd for r in out) > 0
 
 
@@ -108,7 +110,7 @@ def test_batch_chunks_above_the_cap(monkeypatch):
     monkeypatch.setattr(evaluators.httpx, "Client", _FakeClient)
     n = evaluators.MAX_CLAIMS_PER_CALL + 3
     out = evaluators.evaluate_batch([f"claim {i}" for i in range(n)], "input", ["skeptic"])
-    assert len(out) == n and len(_FakeClient.posts) == 2
+    assert len(out) == n and len(_FakeClient.posts) == 2 + 2  # 2 chunks + 1 repair each
 
 
 # --- (c) run order + claim ids ------------------------------------------------------

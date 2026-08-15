@@ -13,7 +13,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from reality_check import judge, skus, store
+from reality_check import hackathon, judge, skus, store
 
 # --- gap mapping (docs/specs/agent-report.md gaps table) -------------------------------------
 
@@ -137,6 +137,55 @@ def _hackathon_findings(hackathon: dict) -> list[dict]:
     return out
 
 
+# --- autonomy (state.hackathon.autonomy, 7 failure modes) ------------------------------------
+
+def _autonomy_rubric_by_id() -> dict[str, dict]:
+    try:
+        rubric = hackathon.load_rubric()
+    except Exception:
+        return {}
+    return {item.get("id"): item for item in (rubric.get("autonomy") or {}).get("items", [])}
+
+
+def _autonomy_section(hackathon_state: dict | None) -> dict | None:
+    """report.json top-level "autonomy": {"stamp","k_hold","items":[...]}. None when the job
+    predates the autonomy rubric (tolerate absence)."""
+    if not hackathon_state or not hackathon_state.get("autonomy"):
+        return None
+    rubric_by_id = _autonomy_rubric_by_id()
+    items = []
+    k_hold = 0
+    for a in hackathon_state["autonomy"]:
+        rubric_item = rubric_by_id.get(a.get("id"), {})
+        status = a.get("status", "unknown")
+        if status == "pass":
+            k_hold += 1
+        items.append({
+            "id": a.get("id"), "title": a.get("title"), "failure": a.get("failure"),
+            "status": status, "score": a.get("score"), "why": a.get("why"), "fix": a.get("fix"),
+            "plain": rubric_item.get("plain", ""), "look_for": rubric_item.get("look_for", ""),
+            "evidence_public": rubric_item.get("evidence_public", []),
+        })
+    return {"stamp": hackathon_state.get("autonomy_stamp", "not_run"), "k_hold": k_hold,
+            "n": len(items), "note": hackathon_state.get("autonomy_note", ""), "items": items}
+
+
+def _autonomy_findings(autonomy: dict | None) -> list[dict]:
+    if not autonomy:
+        return []
+    out = []
+    for it in autonomy["items"]:
+        out.append({
+            "id": it["id"], "section": "autonomy", "status": it["status"],
+            "owner": "human", "claim": it["title"],
+            "evidence": {"kind": "model", "why": it.get("why", ""), "plain": it.get("plain", ""),
+                        "evidence_public": it.get("evidence_public", [])},
+            "fix": it.get("fix", ""), "acceptance": {"claim": it["id"], "must": "status = pass"},
+            "severity": "error" if it["status"] == "fail" else "warn" if it["status"] == "partial" else "info",
+        })
+    return out
+
+
 # --- compounding -------------------------------------------------------------------------------
 
 def _compounding(job_id: str) -> dict[str, Any]:
@@ -190,7 +239,10 @@ def build(job_id: str) -> dict:
         top3 = [f["fix"] for f in business_findings if f["status"] in ("fail", "unknown")][:3] or \
                ["Re-run with a live URL for objective evidence."]
 
-    findings = business_findings + hackathon_findings
+    autonomy = _autonomy_section(hackathon)
+    autonomy_findings = _autonomy_findings(autonomy)
+
+    findings = business_findings + hackathon_findings + autonomy_findings
     compounding = _compounding(job_id)
     sources = st.get("sources") or {"source_kinds": [], "sources": []}
 
@@ -199,10 +251,12 @@ def build(job_id: str) -> dict:
         "generated_at": store.now(),
         "project": job["request"].get("buyer_id", "anonymous"),
         "input": {"url": job["request"].get("url"), "sku": job["request"].get("sku")},
-        "stamps": {"hackathon": hackathon_stamp, "business": business_stamp},
+        "stamps": {"hackathon": hackathon_stamp, "business": business_stamp,
+                   "autonomous": autonomy["stamp"] if autonomy else "not_run"},
         "top3": top3,
         "findings": findings,
         "hackathon": hackathon,
+        "autonomy": autonomy,
         "sources": sources,
         "evidence": {
             "read": (sources.get("sources") or []),
@@ -217,7 +271,12 @@ def build(job_id: str) -> dict:
 
 def _finding_md(f: dict) -> str:
     ev = f.get("evidence", {})
-    if "failing" in ev:
+    if f.get("section") == "autonomy":
+        observed = ev.get("plain", "") or ev.get("why", "")
+        pub = ev.get("evidence_public") or []
+        if pub and f["status"] in ("fail", "partial"):
+            observed += f"  Public: {pub[0].get('what', '')} ({pub[0].get('url', '')})"
+    elif "failing" in ev:
         observed = "; ".join(ev.get("observed") or []) or "no probe evidence"
     elif ev.get("kind") == "human":
         observed = f"humans n={ev.get('n')} p={ev.get('p')}; minority: {ev.get('minority', '')}"
@@ -226,8 +285,12 @@ def _finding_md(f: dict) -> str:
     else:
         observed = str(ev)
     acc = f.get("acceptance", {})
-    done_when = f"{acc.get('probe')} is absent on the next run." if "probe" in acc else \
-        f"{acc.get('claim')} reaches p >= 0.7 on re-run." if acc else "re-run and check."
+    if "probe" in acc:
+        done_when = f"{acc.get('probe')} is absent on the next run."
+    elif acc.get("must") == "status = pass":
+        done_when = f"{acc.get('claim')} reaches status = pass on re-run."
+    else:
+        done_when = f"{acc.get('claim')} reaches p >= 0.7 on re-run." if acc else "re-run and check."
     return (f"### {f['id']} [{f['status']}]\n"
             f"Evidence: {observed}\n"
             f"Fix: {f['fix']}\n"
@@ -242,7 +305,8 @@ def to_agent_md(report: dict) -> str:
         "do not invent facts; every item cites evidence",
         "",
     ]
-    findings = report["findings"]
+    findings = [f for f in report["findings"] if f.get("section") != "autonomy"]
+    autonomy_findings = [f for f in report["findings"] if f.get("section") == "autonomy"]
     agent_owned = [f for f in findings if f.get("owner") == "agent"]
     human_owned = [f for f in findings if f.get("owner") != "agent"]
     business_gaps = [f for f in findings if "gap" in f]
@@ -254,6 +318,11 @@ def to_agent_md(report: dict) -> str:
     lines.append("## Needs a human decision")
     for f in human_owned:
         lines.append(_finding_md(f))
+    if autonomy_findings:
+        autonomy = report.get("autonomy") or {}
+        lines.append(f"## Can it run autonomously ({autonomy.get('k_hold', 0)} of {autonomy.get('n', len(autonomy_findings))} hold, {str(autonomy.get('stamp', 'not_run')).upper()})")
+        for f in autonomy_findings:
+            lines.append(_finding_md(f))
     lines.append("## Business gaps")
     for gap in ("payer", "take_money", "stranger_proof", "loop"):
         gap_findings = [f for f in business_gaps if f["gap"] == gap]
@@ -301,6 +370,12 @@ def _sponsor_table(hackathon: dict | None) -> str:
             f'<th>Status</th><th>Evidence / what is missing</th></tr>{"".join(rows)}</table></div>')
 
 
+def _autonomy_stamp_label(autonomy: dict | None) -> str:
+    if not autonomy:
+        return "not run"
+    return html.escape(f'{autonomy["k_hold"]} of {autonomy["n"]} hold ({autonomy["stamp"]})')
+
+
 def _humans_card(report: dict) -> str:
     h = report["evidence"]["humans"]
     if h.get("pending") or not h.get("n"):
@@ -342,6 +417,24 @@ def _business_gap_cards(findings: list[dict]) -> str:
     return f'<div class="grid2">{"".join(cards)}</div>'
 
 
+def _autonomy_table(autonomy: dict | None) -> str:
+    if not autonomy or not autonomy.get("items"):
+        return "<p class='note'>autonomy rubric not run.</p>"
+    rows = []
+    for it in autonomy["items"]:
+        row = (f"<tr><td><span class='id'>{html.escape(it['id'])}</span></td>"
+               f"<td>{_pill(it['status'])}</td><td>{html.escape(it.get('plain', ''))}</td>"
+               f"<td>{html.escape(it.get('fix', ''))}</td></tr>")
+        if it["status"] in ("fail", "partial") and it.get("evidence_public"):
+            e = it["evidence_public"][0]
+            row += (f"<tr><td></td><td></td><td colspan='2' class='note'>"
+                    f"{html.escape(e.get('what', ''))}: {html.escape(e.get('url', ''))}</td></tr>")
+        rows.append(row)
+    return (f'<p class="note">{html.escape(autonomy.get("note", ""))}</p>'
+            '<div class="tw"><table><tr><th>Failure</th><th>Result</th><th>What it means</th><th>Fix</th></tr>'
+            f'{"".join(rows)}</table></div>')
+
+
 def _repo_advice(findings: list[dict]) -> str:
     tech = [f for f in findings if f.get("section") == "technical"]
     if not tech:
@@ -361,6 +454,7 @@ def to_html(report: dict) -> str:
         f'<div class="eyebrow">Reality Check, job <span class="id">{html.escape(report["job"])}</span></div>'
         f'<h1>{html.escape(str(report.get("project", "")))}</h1>'
         f'<div class="stamps"><span class="stamp warn">Hackathon: {html.escape(stamps["hackathon"])}</span>'
+        f'<span class="stamp warn">Autonomous: {_autonomy_stamp_label(report.get("autonomy"))}</span>'
         f'<span class="stamp bad">Business: {html.escape(stamps["business"])}</span></div>'
         f'<div class="grid2"><div class="card"><div class="k">Do these before you submit</div><ol>{top3}</ol></div>'
         f'{_humans_card(report)}</div>'
@@ -372,9 +466,12 @@ def to_html(report: dict) -> str:
     )
     page2 = ('<section class="page" data-page="PDF page 2"><h2>How to win this hackathon</h2>'
              f'{_judging_table(report.get("hackathon"))}<h3>Messaging</h3>{_messaging_list(report.get("hackathon"))}</section>')
-    page3 = ('<section class="page" data-page="PDF page 3"><h2>Is it a business</h2>'
+    page3 = ('<section class="page" data-page="PDF page 3">'
+             '<h2>Can this run autonomously? Seven ways agent-run companies fail</h2>'
+             f'{_autonomy_table(report.get("autonomy"))}</section>')
+    page4 = ('<section class="page" data-page="PDF page 4"><h2>Is it a business</h2>'
              f'{_business_gap_cards(report["findings"])}</section>')
-    page4 = _repo_advice(report["findings"])
+    page5 = _repo_advice(report["findings"])
     evidence = report.get("sources", {})
     read = ", ".join(str(s.get("kind", "")) for s in evidence.get("sources", [])) or "no sources read"
     last = (f'<section class="page" data-page="evidence"><h2>Evidence</h2>'
@@ -391,7 +488,7 @@ def to_html(report: dict) -> str:
             '.grid2{display:flex;gap:16px}.card{background:#f2f0ea;padding:12px;flex:1}'
             '.id{font-family:monospace}pre{white-space:pre-wrap;background:#eee;padding:12px}'
             '@page{size:A4;margin:2cm}</style>'
-            f'{page1}{page2}{page3}{page4}{last}'
+            f'{page1}{page2}{page3}{page4}{page5}{last}'
             f'<section><h2>agent.md</h2><pre>{agent_md}</pre></section>')
 
 
