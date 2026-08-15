@@ -29,6 +29,23 @@ from reality_check import probes
 MAX_TEXT_BYTES = 12_000
 MAX_README_BYTES = 20_000
 MAX_TREE_PATHS = 300
+MAX_DOC_FILES = 24
+_GUARDRAIL_RE = re.compile(r"policy|envelope|budget|webhook|ledger|health|auth|guard|limit|approve|idempot|protocol", re.I)
+_CODE_EXT = (".py", ".ts", ".js", ".go", ".rs", ".rb", ".java", ".kt", ".swift", ".md")
+
+
+def _doc_head(text: str, limit: int = 240) -> str:
+    """First docstring / leading comment / first heading of a file, one line, capped."""
+    s = text.lstrip()[:4000]
+    m = re.match(r'(?:#![^\n]*\n)?(?:from __future__[^\n]*\n|\s)*(?:"""|\'\'\')(.*?)(?:"""|\'\'\')', s, re.S)
+    if m:
+        body = m.group(1)
+    else:
+        lines = [ln.strip() for ln in s.splitlines()[:8]]
+        cm = [ln.lstrip("#/ *").strip() for ln in lines if ln.startswith(("#", "//", "/*", " *"))]
+        body = " ".join(cm) if cm else (lines[0] if lines else "")
+    body = re.sub(r"\s+", " ", body).strip()
+    return body[:limit]
 MAX_MANIFEST_BYTES = 20_000
 MAX_DECK_PAGES = 60
 
@@ -228,6 +245,25 @@ def read_repo(url: str, *, fetcher: probes.Fetcher | None = None, budget_s: floa
             meta["files"] = len(paths)
             if paths:
                 parts.append("--- files (top " + str(min(len(paths), MAX_TREE_PATHS)) + ") ---\n" + "\n".join(paths[:MAX_TREE_PATHS]))
+            # guardrail evidence: the first docstring/comment lines of files whose names say
+            # policy/envelope/budget/webhook/ledger/health/auth (and every top-level module), so the
+            # autonomy rubric sees a repo's real safeguards, not only the README's claims
+            picks = [p_ for p_ in paths if _GUARDRAIL_RE.search(p_) and p_.endswith(_CODE_EXT)]
+            picks += [p_ for p_ in paths if p_.count("/") <= 1 and p_.endswith(_CODE_EXT) and p_ not in picks]
+            heads: list[str] = []
+            for path in picks[:MAX_DOC_FILES]:
+                try:
+                    fr = _guarded_get(f"https://api.github.com/repos/{owner}/{repo}/contents/{path}", deadline, fetcher,
+                                      resolver, {**headers, "Accept": "application/vnd.github.raw"})
+                except (probes.BlockedHostError, TimeoutError, httpx.HTTPError, OSError):
+                    break
+                if fr.status < 400 and fr.text:
+                    head = _doc_head(fr.text)
+                    if head:
+                        heads.append(f"{path}: {head}")
+            if heads:
+                meta["doc_heads"] = len(heads)
+                parts.append("--- module docstrings (guardrails first) ---\n" + "\n".join(heads))
     except (probes.BlockedHostError, TimeoutError, httpx.HTTPError, OSError):
         meta.setdefault("warnings", []).append("tree_fetch_failed")
 

@@ -264,3 +264,27 @@ def test_judge_accepts_repo_and_deck_and_merges_sources(monkeypatch):
     assert "README says" in job["request"]["input"]
     r2 = c.post("/judge", json={"sku": "reality_check"})
     assert r2.status_code == 422
+
+
+def test_read_repo_includes_tree_and_guardrail_docstrings():
+    """Autonomy grading needs the repo's real safeguards: file names + first docstring lines of
+    policy/envelope/webhook/... modules land in the bundle text."""
+    from reality_check import sources, probes
+    root = "https://api.github.com/repos/acme/rockets"
+    pages = {
+        root: (200, '{"name":"rockets","full_name":"acme/rockets","homepage":"","description":"x"}'),
+        root + "/readme": (200, "# Rockets\nWe sell rockets."),
+        root + "/contents/": (200, "[]"),
+        root + "/git/trees/HEAD?recursive=1": (200, '{"tree":[{"path":"app/policy/envelope.py","type":"blob"},{"path":"main.py","type":"blob"},{"path":"node_modules/x.js","type":"blob"}]}'),
+        root + "/contents/app/policy/envelope.py": (200, '"""Signed spend envelope: caps the agent cannot edit."""\nX=1'),
+        root + "/contents/main.py": (200, '# entrypoint\nprint(1)'),
+    }
+
+    def fetcher(url, timeout):
+        st, body = pages.get(url, (404, "nope"))
+        return probes.FetchResult(status=st, headers={"content-type": "application/json"}, text=body, url=url, elapsed_ms=1)
+
+    src = sources.read_repo("https://github.com/acme/rockets", fetcher=fetcher, resolver=lambda h: ["140.82.112.3"])
+    assert "app/policy/envelope.py" in src.text and "node_modules" not in src.text
+    assert "Signed spend envelope" in src.text
+    assert src.meta.get("files") == 2
