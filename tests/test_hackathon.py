@@ -147,7 +147,7 @@ def test_why_and_fix_quote_the_weakest_claim(monkeypatch):
     out = hackathon.evaluate(TEXT, has_repo=False)
     item = [i for i in out["judging"] if i["id"] == r["judging"][0]["id"]][0]
     assert item["why"] == f"weakest: {weakest}"
-    assert item["fix"] == f"Say or show it: {weakest}"
+    assert item["fix"].endswith(weakest) and item["fix"].startswith("Make this visibly true")
 
 
 # --------------------------------------------------------------------------- sponsor buckets
@@ -180,10 +180,12 @@ def test_sponsor_buckets(monkeypatch):
     install(monkeypatch, FakeBatch(p_for=lambda c: ps.get(c, 0.9)))
     out = hackathon.evaluate("mentions goodhint only", has_repo=False, rubric=rub)
     s = out["sponsors"]
+    # hints decide used vs not: no hint = never "claimed"; short first claim = cheapest to add
     assert [e["id"] for e in s["qualifies"]] == ["sponsor/good"]
-    assert [e["id"] for e in s["claimed_not_evidenced"]] == ["sponsor/claimed"]
-    assert [e["id"] for e in s["cheapest_to_add"]] == ["sponsor/req", "sponsor/cheap"]
+    assert s["claimed_not_evidenced"] == []
+    assert {e["id"] for e in s["cheapest_to_add"]} == {"sponsor/req", "sponsor/cheap", "sponsor/claimed"}
     assert [e["id"] for e in s["not_used"]] == ["sponsor/costly"]
+    assert s["not_used"][0]["status"] == "not_used"
     assert s["cheapest_to_add"][0]["required"] is True
     assert len(s["cheapest_to_add"]) <= 3
 
@@ -211,8 +213,8 @@ def test_stamp_contender(monkeypatch):
 def test_stamp_fixable_when_heavy_items_are_only_partial(monkeypatch):
     rub = _sponsor_rubric()
     install(monkeypatch, FakeBatch(p_for=lambda c: 0.5 if c == "jc" else 0.8))
-    out = hackathon.evaluate("no hints at all", has_repo=False, rubric=rub)
-    assert [e["id"] for e in out["sponsors"]["claimed_not_evidenced"]] != []
+    out = hackathon.evaluate("reqhint only", has_repo=False, rubric=rub)
+    assert [e["id"] for e in out["sponsors"]["qualifies"]] == ["sponsor/req"]
     assert out["stamp"] == "fixable_by_1830"
 
 

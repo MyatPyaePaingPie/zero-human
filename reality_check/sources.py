@@ -28,6 +28,7 @@ from reality_check import probes
 
 MAX_TEXT_BYTES = 12_000
 MAX_README_BYTES = 20_000
+MAX_TREE_PATHS = 300
 MAX_MANIFEST_BYTES = 20_000
 MAX_DECK_PAGES = 60
 
@@ -209,6 +210,26 @@ def read_repo(url: str, *, fetcher: probes.Fetcher | None = None, budget_s: floa
         meta.setdefault("warnings", []).append("contents_fetch_failed")
 
     meta["manifests"] = manifests_found
+
+    # file tree (names only, one call): sponsor evidence often lives in file names and module
+    # docstrings, not the README (terac_client.py, stripe_webhook.py); cap so a monorepo stays cheap
+    try:
+        tree_resp = _guarded_get(
+            f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1", deadline, fetcher, resolver, headers,
+        )
+        if tree_resp.status < 400:
+            try:
+                tree = _json.loads(tree_resp.text or "{}").get("tree") or []
+            except ValueError:
+                tree = []
+            skip = ("node_modules/", ".venv/", "vendor/", "dist/", "build/", ".git/")
+            paths = [e.get("path", "") for e in tree if isinstance(e, dict) and e.get("type") == "blob"
+                     and not any(e.get("path", "").startswith(sk) or f"/{sk}" in e.get("path", "") for sk in skip)]
+            meta["files"] = len(paths)
+            if paths:
+                parts.append("--- files (top " + str(min(len(paths), MAX_TREE_PATHS)) + ") ---\n" + "\n".join(paths[:MAX_TREE_PATHS]))
+    except (probes.BlockedHostError, TimeoutError, httpx.HTTPError, OSError):
+        meta.setdefault("warnings", []).append("tree_fetch_failed")
 
     live_url = None
     for candidate_text in (homepage, "\n".join(p for p in parts if p.startswith("--- README"))):

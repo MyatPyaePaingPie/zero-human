@@ -123,7 +123,9 @@ def _why_fix(rows: list[dict]) -> tuple[str, str]:
     if not rows:
         return "weakest: no model answer", "Say or show it: (no claim judged)"
     weakest = min(rows, key=lambda r: r["p"])
-    return f"weakest: {weakest['text']}", f"Say or show it: {weakest['text']}"
+    return (f"weakest: {weakest['text']}",
+            f"Make this visibly true and state it where a judge looks first (hero line, slide 1 or 2, "
+            f"README first paragraph): {weakest['text']}")
 
 
 def _unknown_rows(claims: list[str]) -> list[dict]:
@@ -159,15 +161,15 @@ def _run_section(items: list[dict], text: str, personas: tuple[str, ...],
 # --------------------------------------------------------------------------- sponsors
 
 def _sponsor_bucket(sp: dict, rows: list[dict], hints: list[str], unknown: bool) -> str:
+    """Evidence hints (grep over README, file names, manifests, page) decide USED or NOT; the model
+    only grades how well the pitch shows it. No hint = not used (or cheapest to add when the
+    sponsor is required or the first claim is a cheap one-liner)."""
     ps = [r["p"] for r in rows]
     majority = len([p for p in ps if p >= QUALIFY_AT]) * 2 > len(ps) if ps else False
-    if hints and majority and not unknown:
-        return "qualifies"
-    if not hints and ps and _mean(ps) >= CLAIMED_AT:
-        return "claimed_not_evidenced"
+    if hints:
+        return "qualifies" if (majority and not unknown) else "claimed_not_evidenced"
     first = str((sp.get("claims") or [""])[0])
-    first_p = ps[0] if ps else 0.0
-    if sp.get("required") or (not hints and len(first) <= CHEAP_CLAIM_CHARS and first_p < CLAIMED_AT):
+    if sp.get("required") or len(first) <= CHEAP_CLAIM_CHARS:
         return "cheapest_to_add"
     return "not_used"
 
@@ -186,9 +188,9 @@ def _sponsors(rubric: dict, text: str, rows_by_item: list[list[dict]], unknown: 
             "required": bool(sp.get("required")),
             "hints_found": found,
             "claims": rows,
-            "status": "unknown" if unknown else _status(_mean([r["p"] for r in rows])),
-            "why": why,
-            "fix": fix,
+            "status": ("unknown" if unknown else _status(_mean([r["p"] for r in rows])) if found else "not_used"),
+            "why": why if found else "no evidence of this sponsor in the repo, manifests, or page",
+            "fix": fix if found else f"Not used. Cheapest way in: {str((sp.get('claims') or [''])[0])}",
         }
         buckets[bucket].append(entry)
     extra = sorted(buckets["cheapest_to_add"], key=lambda e: (not e["required"],))
