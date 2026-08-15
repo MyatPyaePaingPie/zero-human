@@ -32,13 +32,20 @@ The website stays only as the place the PDF and agent.md are hosted (and the pay
    A tapback on the result message = "send me agent.md again" (Linq: tapback as a vote/action). Optional.
    `STOP` opts out (exists).
 
-## One job per phone until payment (Aria, 15:35)
-Everything a phone sends before it pays attaches to its open job: more links, a plain-text pitch, a
-price. The ack invites it: `Got it. Reading your repo, deck, and page now. Feel free to text more before
-you pay: another link, your one-line pitch, your price. Next text is your payment link ($8); the report
-comes right after.` Extra messages get a one-liner (`Added your deck.`), never a second pay link (PAY
-re-sends it). A single message with several links is parsed whole. After payment, new messages start a
-new job or RERUN.
+## Gather, DONE, pay, process (Aria, 15:40; supersedes the section above)
+1. First link or text from a phone opens the job. Ack: `Got it, saved. Text me anything else: more links,
+   your one-line pitch, your price. When you have sent everything, text DONE and I will send your
+   payment link.` No pay link yet.
+2. Every further message before DONE attaches (links parsed, plain text kept as pitch context) and gets a
+   one-liner: `Added your deck. Text DONE when ready.`
+3. `DONE` (also done / ready / go / start): `Reading N sources: repo, deck, page. Here is your payment link
+   ($8): <link>. Report arrives by text after three real people read it.` Grading may start now; delivery
+   waits for payment.
+4. A link after DONE but before payment attaches; reply `Added. Same payment link.` (PAY re-sends it).
+5. No DONE within 10 minutes of the last message: one nudge, `Text DONE when you have sent everything,
+   or PAY to get the link now.`
+6. After payment: process; humans; final PDF + agent.md by text. New messages after payment = new job
+   or RERUN.
 
 ## What this replaces
 - The Lovable form is no longer the intake. Keep the storefront page only as landing + hosting for
