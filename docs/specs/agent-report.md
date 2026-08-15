@@ -104,3 +104,25 @@ Fixed: audit/title-missing.  Regressed: none.
 - `GET /report/{job}/agent.md` lists agent-owned findings before human-owned ones.
 - Two runs on the same host: the second has `prior_runs[0].fixed_since` populated when an id cleared.
 - Stamp rule matches #4's proposal (RED if demand or viability fails majority or a security probe fails hard).
+
+## Gaps: the report's top-level grouping
+
+Every finding carries `gap`, one of four stable ids. Lenses and probes are evidence sources under a
+gap; the report and agent.md group by gap, then by owner (agent first), then severity. The overall
+stamp: `ready_to_charge` (all four gaps green), `one_gap_away` (exactly one gap not green), `not_yet`.
+A gap is red when its weight-3 lens fails majority or a `severity: error` probe finding is present in
+its security/buyability set; amber when only warnings or unresolved human claims remain.
+
+| gap id | question | lenses (model + human) | probe ids |
+|---|---|---|---|
+| `payer` | Does someone pay, and for what? | clarity, demand, viability (weight 3 each), autonomy defaults | `live/pricing-missing` |
+| `take_money` | Can a stranger find it, trust it, and buy? | seo, legal-pages, security, stability, accessibility, agent_ready, ux (Replay) | all `audit/*`; `live/https-missing live/hsts-missing live/csp-missing live/x-frame-missing live/env-exposed live/git-exposed live/status-error live/ttfb-slow live/heavy-page live/privacy-missing live/terms-missing live/contact-missing live/support-missing`; all `agentready/*`; `replay/*` |
+| `stranger_proof` | Do people outside the team say the same thing? | the human layer's votes on the human-flagged claims of clarity + demand (blind, then revised) | none (human evidence only) |
+| `loop` | Is there a fix -> re-run -> delta path? | none today; the section is the compounding data | prior_runs: `fixed_since`, `regressed_since`, N reviewed, common failure ids, rank |
+
+Rules for the mapping: an `audit/*` or `live/*` finding always lands in `take_money` except
+`live/pricing-missing` (`payer`). A model claim lands in the gap of its lens. A human vote lands in
+`stranger_proof` and is also shown inline under the claim it judged. `loop` never carries findings; it
+renders the compounding section and the exact re-run command (`POST /intake/{job}/redeploy` or a fresh
+paste with the same URL). Later lenses (competition, economics, trust, projections, #21) map to `payer`
+(economics, projections) and `take_money` (trust) and `payer` (competition) when enabled.
