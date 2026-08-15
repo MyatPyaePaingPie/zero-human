@@ -11,6 +11,7 @@ one_gap_away (exactly one gap has a fail) / not_yet.
 from __future__ import annotations
 
 import html
+import re
 from typing import Any
 
 from reality_check import hackathon, judge, skus, store
@@ -303,7 +304,9 @@ def to_agent_md(report: dict) -> str:
     stamps = report["stamps"]
     lines = [
         f"# Reality Check ({report['job']})",
-        f"Hackathon: {stamps['hackathon'].upper()}   Business: {stamps['business'].upper()}",
+        f"Hackathon: {_stamp_word('hackathon', stamps['hackathon'])}   "
+        f"Autonomous: {_autonomy_word(report.get('autonomy'))}   "
+        f"Business: {_stamp_word('business', stamps['business'])}",
         "do not invent facts; every item cites evidence",
         "",
     ]
@@ -367,26 +370,126 @@ def _pill(status: str) -> str:
 
 
 def _sponsor_table(hackathon: dict | None) -> str:
-    rows = []
+    rubric_by_id = _sponsor_rubric_by_id()
+
+    def _rubric_name(item: dict) -> str:
+        return rubric_by_id.get(item.get("id"), {}).get("name") or item.get("name") or item.get("id", "")
+
+    def _row(item: dict) -> str:
+        rname = _rubric_name(item)
+        track, prize = _sponsor_track_prize(rname)
+        if not prize:
+            prize = "required rule" if item.get("required") else ""
+        return (f"<tr><td><b>{html.escape(track)}</b></td><td>{html.escape(prize)}</td>"
+                f"<td>{_pill(item.get('status', 'unknown'))}</td>"
+                f"<td>{html.escape(item.get('why', ''))}</td></tr>")
+
+    rows: list[str] = []
     if hackathon:
         sp = hackathon.get("sponsors", {})
-        for bucket, label in (("qualifies", "qualifies"), ("claimed_not_evidenced", "claimed, not evidenced"),
-                               ("cheapest_to_add", "cheapest to add"), ("not_used", "not used")):
-            for item in sp.get(bucket, []):
-                rows.append(f"<tr><td><b>{html.escape(item.get('name', item.get('id', '')))}</b></td>"
-                            f"<td>{html.escape(str(item.get('required', '')))}</td>"
-                            f"<td>{_pill(item.get('status', bucket))}</td>"
-                            f"<td>{html.escape(item.get('why', ''))}</td></tr>")
+        entries = [it for bucket in ("qualifies", "claimed_not_evidenced", "cheapest_to_add")
+                   for it in sp.get(bucket, [])]
+        terac = next((it for it in entries if it.get("id") == "sponsor/terac"), None)
+        stripe = next((it for it in entries if it.get("id") == "sponsor/stripe"), None)
+        rest = [it for it in entries if it.get("id") not in ("sponsor/terac", "sponsor/stripe")]
+        rest.sort(key=lambda it: (not it.get("required"), -_prize_amount(_sponsor_track_prize(_rubric_name(it))[1])))
+        for it in [x for x in (terac, stripe) if x] + rest:
+            rows.append(_row(it))
+        not_used = sp.get("not_used", [])
+        if not_used:
+            names = ", ".join(_short_name(_rubric_name(it)) for it in not_used)
+            rows.append(f"<tr><td colspan='4'>Not used: {html.escape(names)}</td></tr>")
     if not rows:
         rows = ["<tr><td colspan=4>hackathon rubric not run</td></tr>"]
     return ('<h2>Sponsor tracks</h2><div class="tw"><table><tr><th>Track</th><th>Prize</th>'
             f'<th>Status</th><th>Evidence / what is missing</th></tr>{"".join(rows)}</table></div>')
 
 
+def _submission_checklist_block(hackathon: dict | None) -> str:
+    sc = (hackathon or {}).get("submission_checklist") or {}
+    items = sc.get("items") or []
+    if not items:
+        return ""
+    lis = "".join(f"<li>{html.escape(it)}</li>" for it in items)
+    return f'<div class="card"><div class="k">Submission checklist</div><ul>{lis}</ul></div>'
+
+
+def _what_we_read(report: dict) -> str:
+    sources = (report.get("sources") or {}).get("sources") or []
+    parts = []
+    for src in sources:
+        kind = src.get("kind")
+        meta = src.get("meta") or {}
+        if kind == "repo":
+            parts.append("README")
+        elif kind == "deck":
+            n = meta.get("slides")
+            parts.append(f"{n} slides" if n else "slides")
+        elif kind == "page":
+            title = meta.get("title")
+            parts.append(f'page "{title}"' if title else "landing page")
+        elif kind == "pitch":
+            parts.append("pasted pitch text")
+    return " + ".join(parts) if parts else "no sources read"
+
+
 def _autonomy_stamp_label(autonomy: dict | None) -> str:
     if not autonomy:
         return "not run"
     return html.escape(f'{autonomy["k_hold"]} of {autonomy["n"]} hold ({autonomy["stamp"]})')
+
+
+# --- human-facing stamp words (advisor dogfood #6) --------------------------------------------
+
+_STAMP_WORDS = {
+    "hackathon": {"contender": "Contender", "fixable_by_1830": "Fixable by 18:30",
+                  "not_yet": "Not yet", "not_run": "Not run"},
+    "business": {"ready_to_charge": "Ready to charge", "one_gap_away": "One gap away",
+                 "not_yet": "Not a business yet", "not_run": "Not run"},
+}
+_AUTONOMY_WORDS = {"autonomous": "Autonomous", "human_in_the_loop": "Human in the loop",
+                    "not_autonomous": "Not autonomous"}
+
+
+def _stamp_word(kind: str, value: str) -> str:
+    return _STAMP_WORDS.get(kind, {}).get(value, value)
+
+
+def _autonomy_word(autonomy: dict | None) -> str:
+    if not autonomy:
+        return "Not run"
+    word = _AUTONOMY_WORDS.get(autonomy["stamp"], autonomy["stamp"])
+    return f'{word}, {autonomy["k_hold"]} of {autonomy["n"]}'
+
+
+# --- sponsor table: rubric-sourced prize text, Terac/Stripe first, not_used collapsed ---------
+
+def _sponsor_rubric_by_id() -> dict[str, dict]:
+    try:
+        rubric = hackathon.load_rubric()
+    except Exception:
+        return {}
+    return {s.get("id"): s for s in rubric.get("sponsors", [])}
+
+
+def _sponsor_track_prize(rubric_name: str) -> tuple[str, str]:
+    """Rubric sponsor `name` bakes the prize text in after the last ", $..." (e.g. "Linq
+    (iMessage/RCS/SMS API), $1,500 / $1,000"); split it into (track, prize). No embedded prize
+    (Terac/Stripe: required rules, or partners with no track) -> prize "" ."""
+    parts = re.split(r", (?=\$)", rubric_name, maxsplit=1)
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip()
+    return rubric_name.strip(), ""
+
+
+def _short_name(rubric_name: str) -> str:
+    track, _ = _sponsor_track_prize(rubric_name)
+    return track.split(" (")[0].strip()
+
+
+def _prize_amount(prize: str) -> float:
+    m = re.search(r"\$([\d,]+)", prize)
+    return float(m.group(1).replace(",", "")) if m else 0.0
 
 
 def _humans_card(report: dict) -> str:
@@ -466,11 +569,12 @@ def to_html(report: dict) -> str:
         '<section class="page" data-page="PDF page 1">'
         f'<div class="eyebrow">Reality Check, job <span class="id">{html.escape(report["job"])}</span></div>'
         f'<h1>{html.escape(str(report.get("project", "")))}</h1>'
-        f'<div class="stamps"><span class="stamp warn">Hackathon: {html.escape(stamps["hackathon"])}</span>'
-        f'<span class="stamp warn">Autonomous: {_autonomy_stamp_label(report.get("autonomy"))}</span>'
-        f'<span class="stamp bad">Business: {html.escape(stamps["business"])}</span></div>'
+        f'<div class="stamps"><span class="stamp warn">Hackathon: {html.escape(_stamp_word("hackathon", stamps["hackathon"]))}</span>'
+        f'<span class="stamp warn">Autonomous: {html.escape(_autonomy_word(report.get("autonomy")))}</span>'
+        f'<span class="stamp bad">Business: {html.escape(_stamp_word("business", stamps["business"]))}</span></div>'
         f'<div class="grid2"><div class="card"><div class="k">Do these before you submit</div><ol>{top3}</ol></div>'
-        f'{_humans_card(report)}</div>'
+        f'{_humans_card(report)}{_submission_checklist_block(report.get("hackathon"))}</div>'
+        f'<p class="note">What we read: {html.escape(_what_we_read(report))}.</p>'
         f'{_sponsor_table(report.get("hackathon"))}'
         f'<div class="foot">Stamp rules: hackathon = contender/fixable_by_1830/not_yet by judging weight-3 items; '
         f'business = ready_to_charge/one_gap_away/not_yet by the four gaps. '
@@ -498,9 +602,10 @@ def to_html(report: dict) -> str:
             '.pill{padding:1px 8px;font-size:12px;font-weight:700}.p-good{background:#1f7a3f;color:#fff}'
             '.p-bad{background:#b3261e;color:#fff}.p-warn{background:#b7791f;color:#fff}.p-na{background:#ddd}'
             'table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:6px;text-align:left}'
-            '.grid2{display:flex;gap:16px}.card{background:#f2f0ea;padding:12px;flex:1}'
+            'tr{page-break-inside:avoid}td:last-child{width:50%}'
+            '.grid2{display:flex;gap:16px;flex-wrap:wrap}.card{background:#f2f0ea;padding:12px;flex:1}'
             '.id{font-family:monospace}pre{white-space:pre-wrap;background:#eee;padding:12px}'
-            '@page{size:A4;margin:2cm}</style>'
+            '@page{size:A4;margin:18mm}</style>'
             f'{page1}{page2}{page3}{page4}{page5}{last}'
             f'<section><h2>agent.md</h2><pre>{agent_md}</pre></section>')
 

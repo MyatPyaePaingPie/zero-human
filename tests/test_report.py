@@ -28,16 +28,20 @@ HACKATHON_FIXTURE = {
          "score": 1.0, "why": "no open bugs", "fix": "", "claims": []},
     ],
     "sponsors": {
-        "qualifies": [{"id": "sponsor/stripe", "name": "Stripe", "required": True, "hints_found": ["buy.stripe.com"],
-                       "claims": [], "status": "qualifies", "why": "payment link found", "fix": ""}],
+        "qualifies": [{"id": "sponsor/terac", "name": "Terac", "required": True, "hints_found": ["terac"],
+                       "claims": [], "status": "pass", "why": "recruited via MCP", "fix": ""},
+                      {"id": "sponsor/stripe", "name": "Stripe", "required": True, "hints_found": ["buy.stripe.com"],
+                       "claims": [], "status": "pass", "why": "payment link found", "fix": ""}],
         "claimed_not_evidenced": [{"id": "sponsor/linq", "name": "Linq", "required": False, "hints_found": [],
-                                    "claims": [], "status": "claimed_not_evidenced",
+                                    "claims": [], "status": "partial",
                                     "why": "deck says texts customers, no linqapp in repo", "fix": "add linq usage"}],
         "cheapest_to_add": [{"id": "sponsor/replay", "name": "Replay", "required": False, "hints_found": [],
-                              "claims": [], "status": "not_used", "why": "not used yet",
+                              "claims": [], "status": "fail", "why": "not used yet",
                               "fix": "run qa.replay.io on the URL"}],
-        "not_used": [{"id": "sponsor/render-workflows", "name": "Render Workflows", "required": False,
-                      "hints_found": [], "claims": [], "status": "not_used", "why": "hosted, no workflows", "fix": ""}],
+        "not_used": [{"id": "sponsor/render", "name": "Render Workflows", "required": False,
+                      "hints_found": [], "claims": [], "status": "fail", "why": "hosted, no workflows", "fix": ""},
+                     {"id": "sponsor/pioneer", "name": "Pioneer", "required": False,
+                      "hints_found": [], "claims": [], "status": "fail", "why": "not used", "fix": ""}],
     },
     "messaging": [
         {"id": "msg/first-screen", "theme": "headline", "status": "fail", "where": "slide 1 headline",
@@ -280,3 +284,80 @@ def test_autonomy_absent_on_older_jobs_tolerated():
     assert "autonomy rubric not run" in doc
     md = report.to_agent_md(rep)
     assert "## Can it run autonomously" not in md
+
+
+def test_sponsor_table_terac_stripe_first_prize_from_rubric_not_used_collapsed():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    doc = report.to_html(rep)
+    i_terac, i_stripe, i_linq = doc.index("Terac"), doc.index("Stripe"), doc.index("Linq")
+    assert i_terac < i_stripe < i_linq, "Terac then Stripe then the rest, by required/prize desc"
+    # prize text comes from the rubric entry (hackathon.load_rubric()["sponsors"]), not the
+    # fixture's bare "Linq" name -- the fixture never states a dollar amount itself
+    assert "$1,500" in doc
+    assert "required rule" in doc  # Terac/Stripe have no $ prize in the rubric text
+    # every not_used sponsor collapses into exactly one row
+    assert doc.count("Not used:") == 1
+    not_used_row = doc[doc.index("Not used:"):doc.index("Not used:") + 200]
+    assert "Render" in not_used_row and "Pioneer" in not_used_row
+    # and they must not also get their own standalone <b> track cell
+    assert "<b>Render" not in doc and "<b>Pioneer" not in doc
+
+
+def test_stamp_words_are_human_readable_in_html_and_md():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    assert rep["stamps"]["hackathon"] == "fixable_by_1830"
+    doc = report.to_html(rep)
+    md = report.to_agent_md(rep)
+    assert "Fixable by 18:30" in doc and "Fixable by 18:30" in md
+    assert "Human in the loop, 5 of 7" in doc and "Human in the loop, 5 of 7" in md
+    # the stamps pill line itself uses the human word, not the raw enum spelling
+    stamps_div = doc[doc.index('class="stamps"'):doc.index('class="grid2"')]
+    assert "fixable_by_1830" not in stamps_div
+    assert "human_in_the_loop" not in stamps_div
+
+
+def test_business_stamp_word_ready_to_charge_and_not_yet():
+    assert report._stamp_word("business", "ready_to_charge") == "Ready to charge"
+    assert report._stamp_word("business", "one_gap_away") == "One gap away"
+    assert report._stamp_word("business", "not_yet") == "Not a business yet"
+    assert report._stamp_word("hackathon", "contender") == "Contender"
+    assert report._stamp_word("hackathon", "not_yet") == "Not yet"
+
+
+def test_submission_checklist_block_absent_without_data():
+    # HACKATHON_FIXTURE has no submission_checklist key: the block must degrade to nothing,
+    # never crash (real coverage of the populated case is test_submission_checklist_renders_when_present)
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    doc = report.to_html(rep)
+    assert "Submission checklist" not in doc
+
+
+def test_submission_checklist_renders_when_present():
+    jid = _make_job()
+    _settle(jid)
+    fixture = dict(HACKATHON_FIXTURE)
+    fixture["submission_checklist"] = {"note": "guidebook p.14-15", "items": [
+        "Uses the Terac MCP with real human input", "Personal Stripe account created"]}
+    store.patch_job_state(jid, "hackathon", fixture)
+    rep = report.build(jid)
+    doc = report.to_html(rep)
+    assert "Uses the Terac MCP with real human input" in doc
+    assert "Personal Stripe account created" in doc
+
+
+def test_what_we_read_line_present():
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    rep = report.build(jid)
+    doc = report.to_html(rep)
+    assert "What we read:" in doc
