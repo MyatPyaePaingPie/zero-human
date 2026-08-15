@@ -9,7 +9,8 @@ Flow (Payment Link + client_reference_id, no Checkout Session API needed):
 
 Signature verification is stdlib HMAC per Stripe's scheme (t=..., v1=...), secret in
 STRIPE_WEBHOOK_SECRET. Idempotency key = the checkout session id (money-swarm failure mode #1:
-webhooks double-fire; claim the key before any side effect). Amount comes from the event, never
+webhooks double-fire, and the poller runs too): claimed atomically BEFORE any side effect via
+store.claim_payment, released on failure so a retry processes exactly once. Amount comes from the event, never
 from the request body (protocol rule: paid status is a receipt, not a claim).
 """
 from __future__ import annotations
@@ -49,20 +50,6 @@ def verify_signature(payload: bytes, sig_header: str, secret: str, now: float | 
     return any(hmac.compare_digest(expected, v) for v in v1s)
 
 
-def _is_claimed(session_id: str) -> bool:
-    with store.conn() as c:
-        return c.execute("SELECT 1 FROM events WHERE kind='stripe.session' AND payload=? LIMIT 1",
-                         (json.dumps({"session": session_id}),)).fetchone() is not None
-
-
-def _claim(session_id: str) -> None:
-    """Idempotency mark, written only AFTER the ledger/job side effects succeeded, so a failure
-    (evaluator outage, DB lock) leaves the session unclaimed and the poller retries it."""
-    with store.conn() as c:
-        c.execute("INSERT INTO events(job_id,kind,payload,created_at) VALUES(NULL,'stripe.session',?,?)",
-                  (json.dumps({"session": session_id}), store.now()))
-
-
 def complete_session(session: dict) -> dict:
     """Turn one paid Checkout Session into revenue + a started job. Idempotent on session id.
     Shared by the webhook and the read-only poller (stripe_poll.py); the amount always comes
@@ -70,7 +57,7 @@ def complete_session(session: dict) -> dict:
     session_id = session["id"]
     if (session.get("payment_status") or "unpaid") != "paid":
         return {"unpaid": session_id}
-    if _is_claimed(session_id):
+    if not store.claim_payment(session_id):   # claim FIRST: no window for a double start
         return {"duplicate": session_id}
     amount = float(session.get("amount_total") or 0) / 100.0
     job_id = session.get("client_reference_id")
@@ -91,10 +78,11 @@ def complete_session(session: dict) -> dict:
         else:
             out = {"noop": job_id, "status": job["status"]}
     except Exception as exc:
+        # release so a retry (webhook redelivery or next poll) reprocesses exactly once
+        store.release_payment_claim(session_id)
         store.event(job_id, "stripe.session.failed", {"session": session_id, "error": str(exc)[:300]})
         raise
     store.event(job_id, "stripe.paid", {"session": session_id, "amount_usd": amount})
-    _claim(session_id)
     return out
 
 

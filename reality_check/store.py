@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS ledger (
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, kind TEXT NOT NULL, payload TEXT, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS payment_claims (
+  session_id TEXT PRIMARY KEY, created_at TEXT NOT NULL
+);
 """
 
 
@@ -78,6 +81,19 @@ def add_human_answer(job_id: str, source: str, respondent: str, answer_yes: bool
             return True
         except sqlite3.IntegrityError:
             return False
+
+
+def claim_payment(session_id: str) -> bool:
+    """Atomic idempotency claim (INSERT OR IGNORE on the PK). True = this caller owns processing.
+    Safe across the webhook and the poller, in-process or across processes."""
+    with _lock, conn() as c:
+        cur = c.execute("INSERT OR IGNORE INTO payment_claims(session_id, created_at) VALUES(?,?)", (session_id, now()))
+        return cur.rowcount == 1
+
+
+def release_payment_claim(session_id: str) -> None:
+    with _lock, conn() as c:
+        c.execute("DELETE FROM payment_claims WHERE session_id=?", (session_id,))
 
 
 def human_answers(job_id: str) -> list[dict]:

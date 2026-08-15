@@ -94,6 +94,7 @@ def test_stripe_signature_and_idempotency(monkeypatch):
     sig = hmac.new(b"whsec", f"{ts}.".encode() + payload, hashlib.sha256).hexdigest()
     assert stripe_webhook.verify_signature(payload, f"t={ts},v1={sig}", "whsec")
     assert not stripe_webhook.verify_signature(payload, f"t={ts},v1=deadbeef", "whsec")
-    assert stripe_webhook._is_claimed("cs_1") is False
-    stripe_webhook._claim("cs_1")
-    assert stripe_webhook._is_claimed("cs_1") is True
+    assert store.claim_payment("cs_1") is True
+    assert store.claim_payment("cs_1") is False
+    store.release_payment_claim("cs_1")
+    assert store.claim_payment("cs_1") is True
