@@ -119,15 +119,22 @@ def test_timeout_fetcher_yields_no_findings():
 
 
 def test_agentready_mocked_dict_and_findings():
+    """Real API shape: checks.<category>.<check>.status; 'discovery' aliases to protocolDiscovery;
+    neutral is neither pass nor fail."""
     def poster(url, timeout_s):
-        return {"level": 2, "levelName": "partial", "failing": ["discoverability", "commerce"],
-                "passing": ["botAccessControl"], "summary": "partial support"}
-
+        return {"level": 0, "levelName": "Not Ready", "checks": {
+            "discoverability": {"robotsTxt": {"status": "fail", "message": "robots.txt not found"}, "sitemap": {"status": "pass"}},
+            "contentAccessibility": {"markdownNegotiation": {"status": "pass"}},
+            "botAccessControl": {"webBotAuth": {"status": "neutral"}},
+            "discovery": {"mcpServerCard": {"status": "fail", "message": "no card"}},
+            "commerce": {"x402": {"status": "neutral"}}}}
     result, findings = agentready.scan("https://good.example.com/", poster=poster)
-    assert result == {"level": 2, "levelName": "partial", "failing": ["discoverability", "commerce"],
-                      "passing": ["botAccessControl"], "summary": "partial support"}
+    assert result["level"] == 0
+    assert [f["category"] for f in result["failing"]] == ["discoverability", "protocolDiscovery"]
+    assert "discoverability.sitemap" in result["passing"]
     ids = {f["id"] for f in findings}
-    assert ids == {"agentready/discoverability-failing", "agentready/commerce-failing"}
+    assert ids == {"agentready/discoverability-failing", "agentready/protocolDiscovery-failing"}
+    assert "robots.txt not found" in findings[0]["evidence"]
 
 
 def test_agentready_exception_fails_closed():
