@@ -1,44 +1,92 @@
 """FastAPI surface.
 
 POST /judge                 buyer (agent or paid human) submits a judgment request
+POST /intake                verified_autonomous intake (claims + invariants, builder-blind)
+POST /order, GET /order/{id} pay-first flow (stripe_webhook.py): pending job -> Payment Link -> poller/webhook starts it
 GET  /judge/{job_id}        verdict so far
 GET  /rate/{job_id}         human rating page (Terac activity task_url / Linq link / room QR)
 POST /rate/{job_id}         human answer
-GET  /ledger                revenue, evidence cost, margin
-GET  /events                decision log (what the company did and why)
-GET  /                      dashboard (reads the three above)
+POST /before_after/lock/{b} lock the "before" verdict hash; GET /before_after/{b}/{a} compare
+GET  /ledger /events /jobs /learning   receipts, decision log, verdicts, arm gains + evaluator reputation
+GET  /                      dashboard
 
-Payment gating (Stripe webhook -> start job) is wired by stripe_webhook.py (money-swarm session);
-until then /judge accepts an `X-RC-Paid` header for local testing only.
+Paid status is a receipt (Stripe session in the ledger), never a claim: protocol.admit() reads it;
+X-RC-Paid is honoured only when RC_DEV=1.
 """
 from __future__ import annotations
 
 import html
-import os
+import uuid
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
-from reality_check import intake, judge, skus, store
+from reality_check import before_after, intake, judge, skus, store, stripe_poll, stripe_webhook, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
+from reality_check.policy import learning, protocol
 
-app = FastAPI(title="Reality Check", version="0.0.1")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    stripe_poll.start_background()
+    yield
+
+
+app = FastAPI(title="Reality Check", version="0.0.1", lifespan=_lifespan)
 store.init()
+app.include_router(stripe_webhook.router)
+terac_client.register()
 
 TERAC_CALLBACK = "https://terac.com/api/external/callback"
 
 
+async def _admit(request: Request) -> tuple[dict, protocol.Admission]:
+    body = await request.json()
+    adm = protocol.admit(body, headers=dict(request.headers))
+    if not adm.admitted:
+        raise HTTPException(409, adm.reason)
+    return body, adm
+
+
 @app.post("/judge", response_model=Verdict)
-def post_judge(req: JudgeRequest, x_rc_paid: str | None = Header(default=None)) -> Verdict:
-    paid = float(x_rc_paid) if x_rc_paid else 0.0
-    return judge.start(req, paid_usd=paid)
+async def post_judge(request: Request) -> Verdict:
+    body, adm = await _admit(request)
+    try:
+        req = JudgeRequest(**body)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    job_id = uuid.uuid4().hex[:12]
+    protocol.record(job_id, adm)
+    return judge.start(req, paid_usd=adm.paid_usd, job_id=job_id)
 
 
 @app.post("/intake", response_model=Verdict)
-def post_intake(req: intake.IntakeRequest, x_rc_paid: str | None = Header(default=None)) -> Verdict:
-    if x_rc_paid:
-        req.paid_usd = float(x_rc_paid)
+async def post_intake(request: Request) -> Verdict:
+    body, adm = await _admit(request)
+    try:
+        req = intake.IntakeRequest(**body)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    req.paid_usd = adm.paid_usd
     return intake.submit(req)
+
+
+@app.post("/before_after/lock/{job_id}")
+def before_after_lock(job_id: str) -> dict:
+    if not store.get_job(job_id):
+        raise HTTPException(404, "no such job")
+    return {"job_id": job_id, "before_hash": before_after.lock(job_id)}
+
+
+@app.get("/before_after/{before_id}/{after_id}")
+def before_after_compare(before_id: str, after_id: str) -> dict:
+    return before_after.compare(before_id, after_id)
+
+
+@app.get("/learning")
+def learning_report() -> dict:
+    return learning.report()
 
 
 @app.get("/skus")
@@ -59,7 +107,9 @@ def rate_page(job_id: str, src: str = "local", r: str | None = None, teracSubmis
     job = store.get_job(job_id)
     if not job:
         raise HTTPException(404, "no such job")
-    respondent = teracSubmissionId or r or ""
+    # venue NAT: every phone shares one IP, so anonymous respondents get a per-page uuid,
+    # never the client IP (UNIQUE(job,source,respondent,claim) would silently drop them)
+    respondent = teracSubmissionId or r or uuid.uuid4().hex[:12]
     if teracSubmissionId:
         src = "terac"
     hq = html.escape(job["state"].get("human_question") or "")
@@ -94,13 +144,17 @@ async def rate_submit(job_id: str, request: Request):
         raise HTTPException(404, "no such job")
     form = await request.form()
     src = str(form.get("src", "local"))
-    respondent = str(form.get("respondent", "")) or (request.client.host if request.client else "anon")
+    respondent = str(form.get("respondent", "")) or uuid.uuid4().hex[:12]
     free_text = str(form.get("free_text", ""))
     n = int(form.get("n_claims", 1))
+    accepted = 0
     for i in range(n):
         v = form.get(f"c{i}")
         yes = True if v == "yes" else False if v == "no" else None
-        store.add_human_answer(job_id, src, respondent, yes, free_text if i == 0 else "", claim_idx=i)
+        accepted += int(store.add_human_answer(job_id, src, respondent, yes, free_text if i == 0 else "", claim_idx=i))
+    if not accepted:
+        store.event(job_id, "human.duplicate", {"src": src, "respondent": respondent[:16]})
+        return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:18px system-ui;margin:3rem'>Already counted. Thank you.</p>")
     store.event(job_id, "human.answered", {"src": src, "n_claims": n})
     judge.on_human_answer(job_id)
     if src == "terac" and form.get("respondent"):

@@ -52,6 +52,11 @@ class JudgeRequest(BaseModel):
         if not self.claims:
             raise ValueError("at least one claim is required")
         self.claim = self.claims[0]
+        if self.personas:
+            from reality_check.evaluators import PERSONAS
+            bad = [x for x in self.personas if x not in PERSONAS]
+            if bad:
+                raise ValueError(f"unknown personas {bad}; valid: {sorted(PERSONAS)}")
         return self
 
 

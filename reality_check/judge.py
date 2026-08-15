@@ -10,15 +10,33 @@ Status machine per job:
 """
 from __future__ import annotations
 
+import os
 import uuid
+from datetime import datetime, timezone
 
 from reality_check import evaluators, panels, skus, store
 from reality_check.core import consensus, voi
 from reality_check.core.brier import brier
 from reality_check.core.models import ClaimVerdict, JudgeRequest, Verdict, VoiDecision
+from reality_check.policy import envelope, learning
 
 HUMAN_TARGET_N = 5
 HUMAN_MIN_N_TO_SETTLE = 3
+
+
+def seconds_to_deadline() -> float | None:
+    """RC_DEADLINE_ISO (e.g. 2026-08-15T18:30:00-07:00): evidence that cannot arrive before it
+    is not worth buying. None when unset."""
+    raw = os.environ.get("RC_DEADLINE_ISO")
+    if not raw:
+        return None
+    try:
+        dl = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dl.tzinfo is None:
+        dl = dl.replace(tzinfo=timezone.utc)
+    return max(0.0, (dl - datetime.now(timezone.utc)).total_seconds())
 
 
 def _majority(yes: int, no: int) -> tuple[str, float]:
@@ -63,13 +81,23 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     worst = max(claims, key=lambda c: c["consensus"]["dissent"])
     store.event(job_id, "evaluators.done", {"claims": [(c["consensus"]["side"], round(c["consensus"]["p"], 2), round(c["consensus"]["dissent"], 2)) for c in claims], "cost": cost})
 
+    max_latency = seconds_to_deadline()
+    arms = learning.arms()  # measured gains from settled jobs flow into the gate
     decision = voi.decide(
         p_internal=worst["consensus"]["p"], dissent=worst["consensus"]["dissent"],
         cost_if_wrong_usd=req.cost_if_wrong_usd, max_budget_usd=req.max_budget_usd,
+        arms=arms, max_latency_s=max_latency,
     )
+    if max_latency is not None:
+        decision = decision.model_copy(update={"reason": decision.reason + f" (deadline in {max_latency/60:.0f} min)"})
     if req.force_humans and not decision.buy:
         decision = decision.model_copy(update={"buy": True, "arm": decision.arm or "linq_panel",
                                                "reason": "humans sold to buyer (force_humans); VOI gate bypassed: " + decision.reason})
+    if decision.buy and decision.arm:
+        # company spend authority is code (envelope), never the buyer's flag or free text
+        price = next((a.price_usd for a in arms if a.name == decision.arm), 0.0)
+        if not envelope.gate_panel_launch(job_id, decision.arm, price, paid_usd):
+            decision = decision.model_copy(update={"buy": False, "reason": "envelope denied (see envelope.checked event): " + decision.reason})
     store.event(job_id, "voi.decided", decision.model_dump())
 
     state = {"claims": claims, "voi": decision.model_dump(), "panel": None,
@@ -97,12 +125,17 @@ def _answers_by_claim(job_id: str) -> dict[int, list[dict]]:
 
 
 def on_human_answer(job_id: str) -> Verdict:
-    """Called after every human submission; settles once enough humans answered claim 0."""
+    """Called after every human submission. Settles at HUMAN_MIN_N_TO_SETTLE and re-settles on
+    every answer up to HUMAN_TARGET_N so brier/flipped track the same majority verdict() shows;
+    frozen once the target is reached."""
     job = store.get_job(job_id)
-    if not job or job["status"] == "settled":
+    if not job:
         return verdict(job_id)
     by_claim = _answers_by_claim(job_id)
-    if len(by_claim.get(0, [])) >= HUMAN_MIN_N_TO_SETTLE:
+    n = len(by_claim.get(0, []))
+    if job["status"] == "settled" and (n > HUMAN_TARGET_N or job["state"].get("settled_n_humans", 0) >= HUMAN_TARGET_N):
+        return verdict(job_id)
+    if n >= HUMAN_MIN_N_TO_SETTLE:
         _settle_against_humans(job, by_claim)
     return verdict(job_id)
 
@@ -124,6 +157,7 @@ def _settle_against_humans(job: dict, by_claim: dict[int, list[dict]]) -> None:
         c["consensus"]["humans_flipped_verdict"] = c["consensus"]["side"] != side
         flipped += int(c["consensus"]["humans_flipped_verdict"])
     state["humans_flipped_claims"] = flipped
+    state["settled_n_humans"] = len(by_claim.get(0, []))
     store.put_job(job["job_id"], job["buyer_id"], "settled", job["request"], state)
     store.event(job["job_id"], "job.settled", {"via": "humans", "flipped_claims": flipped, "n_humans": len(by_claim.get(0, []))})
 

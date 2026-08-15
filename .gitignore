@@ -9,3 +9,5 @@ __pycache__/
 .pytest_cache/
 _meta/agentdb/
 _meta/.runtime/
+demo/last_run.json
+state/envelope.json

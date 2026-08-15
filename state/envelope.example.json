@@ -1,0 +1,9 @@
+{
+  "daily_cap_usd": 60,
+  "per_job_cap_usd": 10,
+  "min_margin_ratio": 0.2,
+  "allowed_arms": ["ensemble", "linq_panel", "terac_general"],
+  "expires_at": "2026-08-15T23:59:00+00:00",
+  "signed_by": "aria",
+  "signature": "REPLACE: cp to state/envelope.json, set RC_ENVELOPE_SECRET, run python -m reality_check.policy.envelope sign"
+}

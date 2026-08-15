@@ -75,7 +75,14 @@ def main() -> None:
     ap.add_argument("--paid", type=float, default=8.0, help="what the agent pays per check (0 = unpaid dev call)")
     ap.add_argument("--wait", type=int, default=900)
     ap.add_argument("--rounds", type=int, default=2)
+    ap.add_argument("--dry-stakes", type=float, default=20.0,
+                    help="first, one call at low stakes to show the router REFUSING to buy humans")
     a = ap.parse_args()
+
+    if a.dry_stakes > 0:
+        v0 = judge(a.base, write(a.product), a.dry_stakes, a.budget, 0.0)
+        voi0 = v0.get("voi") or {}
+        print(f"[low stakes ${a.dry_stakes:.0f}] router: {voi0.get('reason')}  buy={voi0.get('buy')}")
 
     log: list[dict] = []
     feedback: list[str] = []
@@ -89,6 +96,8 @@ def main() -> None:
             v = wait_for_humans(a.base, v["job_id"], a.wait)
         print(f"verdict: {v['verdict']} p={v['p']} agreement={v['agreement']} humans={v['n_humans']}  {v['summary']}")
         log.append({"round": rnd, "copy": copy, "verdict": v})
+        if rnd == 1 and v["status"] == "settled":
+            httpx.post(f"{a.base}/before_after/lock/{v['job_id']}", timeout=30)  # pre-register the "before"
         if v["verdict"] == "yes":
             print("\nagent: strangers understand it. shipping.")
             break
@@ -96,6 +105,9 @@ def main() -> None:
         print("agent: rewriting from human feedback:", feedback)
         copy = write(a.product, feedback)
     print("\n=== before/after ===")
+    if len(log) >= 2:
+        cmp_ = httpx.get(f"{a.base}/before_after/{log[0]['verdict']['job_id']}/{log[-1]['verdict']['job_id']}", timeout=30).json()
+        print("pre-registered comparison:", cmp_.get("decision"), cmp_.get("verdict"))
     for e in log:
         vv = e["verdict"]
         print(f"round {e['round']}: verdict={vv['verdict']} p={vv['p']} humans={vv['n_humans']} revenue=${vv['revenue_usd']:.2f} cost=${vv['evidence_cost_usd']:.2f}")
