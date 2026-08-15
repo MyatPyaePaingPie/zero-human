@@ -20,8 +20,9 @@ from reality_check.panels import PUBLIC_BASE
 
 ASK_LINE = "Send me a link to your repo, your slides, or your landing page. Any one works, all three is best."
 TEXT_PRICE_USD = 8.0
-PAY_ACK_LINE = ("Got it. Reading your repo and page now. Next text is your payment link ($8); the report comes "
-                "right after.")
+PAY_ACK_LINE = ("Got it. Reading your repo, deck, and page now. Feel free to text more before you pay: another link, "
+                "your one-line pitch, your price. Next text is your payment link ($8); the report comes right after.")
+ADDED_LINE = "Added your {what} to the same check."
 PAY_LINE = "Reality Check, $8: {url}  You get the hackathon verdict, sponsor tracks, the autonomy grade, a PDF and an agent.md for your coding agent."
 ACK_LINE = ("Got it. Reading your repo and page now. Grading it against today's rubric and the sponsor tracks. "
             "Give me about two minutes.")
@@ -104,6 +105,43 @@ def text_is_free() -> bool:
     return os.environ.get("RC_TEXT_FREE", "0") == "1"
 
 
+def _open_job(phone_hash: str) -> dict | None:
+    """The phone's newest job if it is still unpaid (pending_payment): everything the phone sends
+    before paying attaches to it (Aria: same job until payment, no time window)."""
+    last = store.text_thread_last(phone_hash)
+    if not last:
+        return None
+    job = store.get_job(last["job_id"])
+    if job and job["status"] == "pending_payment":
+        return job
+    return None
+
+
+def attach_to_job(job: dict, text: str) -> dict:
+    """Merge new links / pitch text into an open (unpaid) job's request. Returns what was added."""
+    links = parse_links(text)
+    req = dict(job["request"])
+    added: list[str] = []
+    for slot, what in (("repo", "repo"), ("deck", "deck"), ("url", "landing page")):
+        if links.get(slot) and not req.get(slot):
+            req[slot] = links[slot]
+            added.append(what)
+        elif links.get(slot) and req.get(slot) and req.get(slot) != links[slot]:
+            req[slot] = links[slot]
+            added.append(what)
+    pitch = (links.get("pitch") or "").strip()
+    if pitch and not pitch.upper() in ("PAY", "HUMANS", "RERUN"):
+        req["input"] = ((req.get("input") or "").strip() + "\n" + pitch).strip()[:20000]
+        if not added:
+            added.append("note")
+    store.update_request(job["job_id"], req)
+    from reality_check import linq_client
+    store.text_thread_put(linq_client.rater_id(job["request"].get("notify_phone") or ""), job["job_id"],
+                          {k: req.get(k) for k in ("repo", "deck", "url")} | {"pitch": req.get("input")})
+    store.event(job["job_id"], "text.attached", {"added": added})
+    return {"job_id": job["job_id"], "added": added}
+
+
 def handle_text(phone: str, text: str) -> dict:
     """Router for everything that isn't STOP (the caller handles STOP before this runs)."""
     from reality_check import linq_client
@@ -111,6 +149,18 @@ def handle_text(phone: str, text: str) -> dict:
     t = (text or "").strip()
     first_word = t.split()[0].upper() if t.split() else ""
     phone_hash = linq_client.rater_id(phone)
+
+    open_job = _open_job(phone_hash)
+    if open_job and first_word not in ("RERUN", "HUMANS", "STOP"):
+        if first_word == "PAY":
+            link = os.environ.get("RC_PAYLINK_TEXT") or __import__("reality_check.stripe_webhook", fromlist=["pay_link"]).pay_link("reality_check")
+            if link:
+                linq_client.send(phone, PAY_LINE.format(url=f"{link}?client_reference_id={open_job['job_id']}"), job_id=open_job["job_id"])
+            return {"action": "pay_resent", "job_id": open_job["job_id"]}
+        res = attach_to_job(open_job, t)
+        what = ", ".join(res["added"]) if res["added"] else "message"
+        linq_client.send(phone, ADDED_LINE.format(what=what), job_id=open_job["job_id"])
+        return {"action": "attached", "job_id": open_job["job_id"], "added": res["added"]}
 
     if first_word == "RERUN":
         last = store.text_thread_last(phone_hash)
@@ -321,3 +371,34 @@ def on_humans_ready(job_id: str) -> None:
         return
     if _final_ready(job):
         _send_final(job)
+
+
+def merge_open_jobs(rater: str) -> dict:
+    """Operator: collapse a phone's several pending_payment jobs into the newest one (links merged),
+    cancel the rest, text one line with the surviving pay link."""
+    from reality_check import linq_client, stripe_webhook
+    with store.conn() as c:
+        rows = c.execute("SELECT job_id, request, status FROM jobs WHERE buyer_id=? AND status='pending_payment' ORDER BY created_at DESC",
+                         (f"text:{rater}",)).fetchall()
+    jobs = [{"job_id": r["job_id"], "request": __import__("json").loads(r["request"])} for r in rows]
+    if not jobs:
+        return {"merged": None, "cancelled": []}
+    keep = jobs[0]
+    req = dict(keep["request"])
+    for other in jobs[1:]:
+        for slot in ("repo", "deck", "url"):
+            if not req.get(slot) and other["request"].get(slot):
+                req[slot] = other["request"][slot]
+        extra = (other["request"].get("input") or "").strip()
+        if extra and extra not in (req.get("input") or ""):
+            req["input"] = ((req.get("input") or "") + "\n" + extra).strip()[:20000]
+        with store.conn() as c:
+            c.execute("UPDATE jobs SET status='cancelled', updated_at=? WHERE job_id=?", (store.now(), other["job_id"]))
+        store.event(other["job_id"], "order.cancelled", {"merged_into": keep["job_id"]})
+    store.update_request(keep["job_id"], req)
+    store.text_thread_put(rater, keep["job_id"], {k: req.get(k) for k in ("repo", "deck", "url")} | {"pitch": req.get("input")})
+    phone = req.get("notify_phone")
+    link = os.environ.get("RC_PAYLINK_TEXT") or stripe_webhook.pay_link("reality_check")
+    if phone and link:
+        linq_client.send(phone, f"One check, all your links (repo, deck, page). Use this single link to pay: {link}?client_reference_id={keep['job_id']}", job_id=keep["job_id"])
+    return {"merged": keep["job_id"], "cancelled": [j["job_id"] for j in jobs[1:]], "request": {k: req.get(k) for k in ("repo", "deck", "url")}}

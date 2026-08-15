@@ -274,6 +274,15 @@ def admin_reset_sources(job_id: str, request: Request, body: dict) -> dict:
         raise HTTPException(404, "no such job")
 
 
+@app.post("/admin/thread/{rater}/merge")
+def admin_merge_thread(rater: str, request: Request) -> dict:
+    secret = os.environ.get("RC_ENVELOPE_SECRET", "")
+    if not secret or request.headers.get("x-rc-admin", "") != secret:
+        raise HTTPException(403, "operator token required")
+    from reality_check import textflow
+    return textflow.merge_open_jobs(rater)
+
+
 def _report(job_id: str) -> dict:
     try:
         return report.build(job_id)

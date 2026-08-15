@@ -232,3 +232,25 @@ def test_paid_session_auto_launches_terac_when_switch_on(monkeypatch):
                                            "client_reference_id": jid, "customer_details": {}})
     assert res.get("started") == jid and res.get("humans", {}).get("launched") is True
     assert launched["n"] == 3 and store.get_job(jid)["state"]["panel"]["external_id"] == "opp_auto"
+
+
+def test_messages_before_payment_attach_to_the_same_job(monkeypatch):
+    from reality_check import judge as judge_module, store
+    monkeypatch.setattr(judge_module, "_launch_probes", lambda job_id, url: None)
+    monkeypatch.setattr(judge_module, "_launch_hackathon", lambda job_id, text, has_repo: None)
+    monkeypatch.delenv("RC_TEXT_FREE", raising=False)
+    monkeypatch.setenv("RC_PAYLINK_DEFAULT", "https://buy.stripe.com/test_link")
+    phone = "+15550007777"
+    a = linq_client.handle_inbound(_inbound_event(phone, "https://github.com/acme/rockets"))["textflow"]
+    b = linq_client.handle_inbound(_inbound_event(phone, "https://docs.google.com/presentation/d/abc123/edit"))["textflow"]
+    c_ = linq_client.handle_inbound(_inbound_event(phone, "https://acme.example we sell rockets for $20"))["textflow"]
+    assert a["action"] == "pending_payment" and b["action"] == "attached" and c_["action"] == "attached"
+    assert b["job_id"] == a["job_id"] == c_["job_id"]
+    req = store.get_job(a["job_id"])["request"]
+    assert req["repo"] and req["deck"] and req["url"] == "https://acme.example" and "rockets for $20" in req["input"]
+    # exactly one pay link text for the job
+    pays = [e for e in _dry_sends() if e["job_id"] == a["job_id"] and "buy.stripe.com" in e["payload"]["text"]]
+    assert len(pays) == 1
+    linq_client.handle_inbound(_inbound_event(phone, "PAY"))
+    pays = [e for e in _dry_sends() if e["job_id"] == a["job_id"] and "buy.stripe.com" in e["payload"]["text"]]
+    assert len(pays) == 2
