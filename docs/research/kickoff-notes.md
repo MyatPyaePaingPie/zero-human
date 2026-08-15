@@ -16,7 +16,7 @@ This file only records what the kickoff added or corrected, and the build conseq
 |---|---|---|
 | Submissions lock 18:45 | "Project submissions will close at 06:30" | **Lock is 18:30, not 18:45.** Move every deadline in `augur-memo.md` section 7 back 15 min. Freeze code by 18:00. |
 | Terac panel = verified experts, slow, ~$28/response | Network of 100k+ people, "access in a matter of minutes", MCP hires an expert "from a couple of minutes to a couple of hours"; each team has **$100 Terac credit** | Terac ETA might be minutes for simple tasks, not 6h. Still launch the study first thing; the credit caps us at roughly 3 to 4 expert responses at documented rates, or more if a cheaper tier exists. **Jack (cofounder) is on the floor all day for MCP feasibility questions**: ask him directly what roles, latency, and price are realistic before designing the rating flow. |
-| Stripe: any live account | "All payments must be handled through Stripe ... individual account, not a business account"; organizers track "who walked out with the most revenue" via submitted account info | Our activated live account is Design ELF (a business profile). Confirm with organizers whether that counts, or open the individual account they specified. Revenue must be visible on the account we submit. |
+| Stripe: any live account | "All payments must be handled through Stripe ... individual account, not a business account"; organizers track "who walked out with the most revenue" via submitted account info | **Resolved:** the team uses the Stripe account created by the repo owner (MyatPyaePaingPie), not Design ELF. Payment links, keys, and the submitted revenue account all point there. Aria's Design ELF account is out of scope for today. |
 | One or two prize tracks in play | "Compete in as many tracks as you want ... increases your odds" | Cheap sponsor integrations are worth doing if they take under 20 min each. Ranked below. |
 | Terac requirement = collect human input, use it to improve | Same, framed as "human in the loop for tasks agents can't do" | Reality Check's core loop (agent verdict, dissent, buy human judgment, before/after) satisfies this by construction. No change. |
 
@@ -41,7 +41,7 @@ This file only records what the kickoff added or corrected, and the build conseq
 ## 4. How this informs the build (ordered)
 
 1. **First 15 min**: ask Jack at the Terac table three questions: cheapest role for "read a page, answer 3 yes/no claims", realistic ETA, and whether $100 buys 5+ responses. Design the SKU count around the answer.
-2. **Confirm the Stripe account rule** with the organizer before selling anything; if individual is mandatory, create it and re-point the payment link. Do this before the first sale, not after.
+2. **Stripe: use the repo owner's account.** Create the Reality Check payment link there and put its restricted read-only key in env (never in tree). Nothing gets sold through any other account.
 3. Launch the Terac study by 11:30 regardless (memo rule stands).
 4. Deploy to Render, then run Replay QA on the rating page (cheap track entry, real bug catch).
 5. If core loop is green by 14:00, add Linq delivery of the verdict by iMessage with the Stripe link in-thread. That is one integration hitting two tracks (Linq + Agent-Run Company revenue).
@@ -50,6 +50,6 @@ This file only records what the kickoff added or corrected, and the build conseq
 
 ## 5. Team notes from the chatter
 
-- Repo `zero-human` and the Stripe account were created at the table; invite sent.
+- Repo `zero-human` and the team Stripe account were both created by the repo owner at the table; invite sent to Aria.
 - Aria's tooling is Claude Code, so subagent contracts stay the working shape.
 - Working thesis in one line, said out loud at the table: "the entire premise is false" (no company runs at zero humans); Reality Check makes that the product, agents that know when to buy a human.
