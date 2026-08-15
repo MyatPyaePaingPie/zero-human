@@ -392,26 +392,22 @@ is context for humans. Ids are stable and become finding ids in the report.
       },
       {
         "id": "q2_pay",
-        "text": "Would you, or someone you know, pay for this?",
+        "text": "Would you pay for this?",
         "type": "yesno",
-        "follow": "Who, and why or why not?"
+        "follow": "Why, or why not?",
+        "follow_if_yes": "What would you expect it to cost?",
+        "follow_if_yes_id": "q2_price_guess"
       },
       {
-        "id": "q3_price",
-        "text": "Is the price clear?",
-        "type": "choice",
-        "options": [
-          "yes",
-          "no",
-          "no price shown"
-        ],
-        "follow": "fair / too high / too low"
+        "id": "q3_who",
+        "text": "Who do you know who has this problem?",
+        "type": "text",
+        "hint": "a role or type of person, or 'no one'"
       },
       {
-        "id": "q4_trust",
-        "text": "Would you trust it enough to give it your card today?",
-        "type": "yesno",
-        "follow": "What would make you trust it more?"
+        "id": "q4_stopper",
+        "text": "What is the one thing that would stop you from buying today?",
+        "type": "text"
       },
       {
         "id": "q5_ai_effect",
@@ -425,9 +421,14 @@ is context for humans. Ids are stable and become finding ids in the report.
         "follow": "Why?"
       },
       {
-        "id": "q6_change",
-        "text": "If you could change one thing on this page, what would it be?",
-        "type": "text",
+        "id": "q6_real",
+        "text": "Does this look like a real business or a weekend project?",
+        "type": "choice",
+        "options": [
+          "real",
+          "weekend"
+        ],
+        "follow": "Why?",
         "optional": true
       }
     ],
@@ -436,12 +437,13 @@ is context for humans. Ids are stable and become finding ids in the report.
     },
     "report_lines": [
       "Could say what it does: k of n",
-      "Would pay: k of n",
-      "Would hand over a card: k of n",
-      "Price clear: k of n",
+      "Would pay: k of n (expected price guesses vs the team's price)",
+      "Knows someone with the problem: k of n",
       "Told it is AI-run: more/less/same counts",
-      "two verbatim quotes (q1, q6)"
-    ]
+      "Real business or weekend project: k of n",
+      "two verbatim quotes (q1, q4)"
+    ],
+    "version": "v2 (14:45); jobs launched before this keep v1"
   },
   "terac_first": {
     "note": "Aria 15:00: focus on Terac more than anything. Terac is host, the required rule, and its network IS our human layer. Every Reality Check job launches a Terac general-population study (n=3, auto_approve, activity task pointing at our /rate page so we own the answers). The report's Terac row is first and itemized. Our own submission must show a before/after number from Terac respondents.",

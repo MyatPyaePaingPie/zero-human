@@ -32,31 +32,37 @@ Stimulus, in this order, nothing else:
 
 No repo, no full deck, no probe results, no model output.
 
-## 3. The five questions (each answered in under 30 seconds)
+## 3. The questions (v2, locked 14:45; each answered in under 30 seconds)
 1. `In one line: what does this company do, and who is it for?` (free text, required)
-2. `Would you, or someone you know, pay for this?` yes / no, then `Who, and why or why not?` (one line)
-3. `Is the price clear?` yes / no / no price shown. If yes: `fair / too high / too low`.
-4. `Would you trust it enough to give it your card today?` yes / no, then `What would make you trust it more?` (one line)
+2. `Would you pay for this?` yes / no, then `Why, or why not?` (one line). If yes: `What would you expect it to cost?` (free text; the gap between their guess and the team's price is a finding)
+3. `Who do you know who has this problem?` (a role or type of person, or "no one")
+4. `What is the one thing that would stop you from buying today?` (one line; trust, price, doubt all land here)
 5. `This company is run mostly by AI, with few or no people involved. Knowing that, are you more, less, or equally willing to buy?` more / less / same, then `Why?` (one line)
-Optional 6: `If you could change one thing on this page, what would it be?` (one line)
+Optional 6: `Does this look like a real business or a weekend project?` real / weekend, then one line why.
+
+Why these: a stranger uniquely knows whether they got it, whether they want it, who they know with the
+problem, what stops them, and whether it feels like a company. Price clarity is checked by the page
+probe, not by people. Every answer maps to a rubric item: q1 -> clarity; q2 -> demand/payer + price
+expectation; q3 -> demand/reachable-audience; q4 -> take_money objections + messaging rewrite; q5 ->
+autonomy human-loop + judge/autonomy; q6 -> judge/viability + judge/impressiveness.
 
 ## 4. What comes back (stored per respondent, keyed by job + Terac submission id)
 ```json
 {"job":"j_...","submission_id":"...","seconds":142,
  "q1_what":"a tool that checks your startup idea using real people",
  "q1_match":null,
- "q2_pay":true,"q2_who_why":"a founder friend, before spending on ads",
- "q3_price":"clear","q3_fair":"fair",
- "q4_trust":false,"q4_more":"show who is behind it and a refund line",
+ "q2_pay":true,"q2_why":"I would try it before spending on ads","q2_price_guess":"$10",
+ "q3_who":"a friend who just built an app",
+ "q4_stopper":"no idea who is behind it",
  "q5_ai_effect":"less","q5_why":"I want a person to complain to",
- "q6_change":"the headline says nothing about who it is for"}
+ "q6_real":"weekend","q6_why":"no price, no team, feels like a demo"}
 ```
 `q1_match` is filled afterwards by one model call comparing `q1_what` to the team's own one-line
 pitch (yes / partial / no). That is the comprehension score. Everything else is counted directly.
 
 ## 5. How the report uses it
-- Page 1 block: `Could say what it does: k of n. Would pay: k of n. Would hand over a card: k of n. Price clear: k of n. Told it is AI-run: more / less / same counts.` plus two verbatim quotes (q1 and q6 first).
-- Business gaps: q1/q2 feed `payer` and `stranger_proof`; q3/q4 feed `take_money`.
+- Page 1 block: `Could say what it does: k of n. Would pay: k of n (expected price: $a, $b, $c vs yours $p). Knows someone with the problem: k of n. Told it is AI-run: more / less / same. Real business or weekend project: k / n.` plus two verbatim quotes (q1 and q4 first).
+- Business gaps: q1/q2/q3 feed `payer` and `stranger_proof`; q4 feeds `take_money` and the messaging rewrite.
 - Hackathon: q5 is the answer to the organizer's own question and goes on page 1 and in the deck advice ("2 of 3 strangers said AI-run makes them less willing; your page should say where the humans are").
 - Autonomy: q5 and q4 feed `auto/human-loop-design` (is the human placed where trust needs it).
 - Messaging rewrites quote q1 and q6 verbatim as the brief for the headline fix.
