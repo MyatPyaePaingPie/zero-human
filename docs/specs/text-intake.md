@@ -32,6 +32,14 @@ The website stays only as the place the PDF and agent.md are hosted (and the pay
    A tapback on the result message = "send me agent.md again" (Linq: tapback as a vote/action). Optional.
    `STOP` opts out (exists).
 
+## One job per phone until payment (Aria, 15:35)
+Everything a phone sends before it pays attaches to its open job: more links, a plain-text pitch, a
+price. The ack invites it: `Got it. Reading your repo, deck, and page now. Feel free to text more before
+you pay: another link, your one-line pitch, your price. Next text is your payment link ($8); the report
+comes right after.` Extra messages get a one-liner (`Added your deck.`), never a second pay link (PAY
+re-sends it). A single message with several links is parsed whole. After payment, new messages start a
+new job or RERUN.
+
 ## What this replaces
 - The Lovable form is no longer the intake. Keep the storefront page only as landing + hosting for
   the report URLs and the payment link. keydriver: one line "Text +1 415 577 0605 with your repo,
