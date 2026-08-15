@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reality Check — {{ project }}</title>
+  <style>
+    :root {
+      --ink: #182026;
+      --muted: #667078;
+      --paper: #fffdf8;
+      --wash: #f3f0e8;
+      --line: #d9d5ca;
+      --accent: #215f74;
+      --accent-soft: #e7f1f3;
+      --green: #17633b;
+      --green-soft: #e7f3eb;
+      --amber: #8a5700;
+      --amber-soft: #fff2cf;
+      --red: #9a2f2a;
+      --red-soft: #fbe9e6;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: #d9dde0; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      font-size: 9.4pt;
+      line-height: 1.42;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @page {
+      size: A4;
+      margin: 18mm;
+      @bottom-left {
+        content: "REALITY CHECK  ·  JOB {{ job }}";
+        color: #70787d;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        font-size: 7pt;
+        letter-spacing: .08em;
+      }
+      @bottom-right {
+        content: "PAGE " counter(page) " OF " counter(pages);
+        color: #70787d;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        font-size: 7pt;
+        letter-spacing: .08em;
+      }
+    }
+
+    .major { page-break-before: always; break-before: page; }
+    .major:first-child { page-break-before: auto; break-before: auto; }
+    .page-shell { min-height: 245mm; }
+    .avoid, .card, .track, .finding, .rule, tr { page-break-inside: avoid; break-inside: avoid; }
+    table { border-collapse: collapse; width: 100%; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+    a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 2px; }
+
+    .eyebrow {
+      margin: 0 0 4mm;
+      color: var(--accent);
+      font-size: 7.5pt;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 7mm; font-size: 34pt; line-height: .98; letter-spacing: -.045em; max-width: 155mm; }
+    h2 { margin-bottom: 3mm; font-size: 22pt; line-height: 1.05; letter-spacing: -.03em; }
+    h3 { margin-bottom: 1.5mm; font-size: 11.5pt; line-height: 1.2; }
+    .dek { max-width: 160mm; color: #3f494f; font-size: 11pt; line-height: 1.45; }
+    .section-head { margin-bottom: 7mm; padding-bottom: 5mm; border-bottom: 1.5pt solid var(--ink); }
+    .section-no { float: right; color: var(--muted); font-size: 8pt; letter-spacing: .1em; }
+    .micro, .id { color: var(--muted); font-size: 7pt; letter-spacing: .055em; }
+    .id { display: block; margin-top: 1.4mm; }
+    .label { color: var(--muted); font-size: 7.2pt; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+
+    .verdict { display: flex; min-height: 245mm; flex-direction: column; }
+    .verdict-top { display: flex; justify-content: space-between; gap: 12mm; padding-bottom: 5mm; border-bottom: 1pt solid var(--line); }
+    .wordmark { font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+    .verdict-main { padding-top: 20mm; }
+    .project { margin-bottom: 3mm; color: var(--accent); font-size: 12pt; font-weight: 700; }
+    .stamp-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 3mm; margin: 12mm 0; }
+    .stamp { min-height: 36mm; padding: 5mm; border-top: 3pt solid var(--accent); background: var(--wash); }
+    .stamp strong { display: block; margin-top: 3mm; font-size: 18pt; line-height: 1.02; letter-spacing: -.03em; }
+    .stamp.primary { color: white; background: var(--accent); border-color: var(--accent); }
+    .stamp.primary .label { color: #dcecef; }
+    .priority-list { counter-reset: priority; margin: 0; padding: 0; list-style: none; }
+    .priority-list li { counter-increment: priority; display: grid; grid-template-columns: 10mm 1fr; gap: 3mm; padding: 4mm 0; border-top: 1pt solid var(--line); font-size: 11pt; }
+    .priority-list li::before { content: counter(priority, decimal-leading-zero); color: var(--accent); font-weight: 800; }
+    .verdict-bottom { margin-top: auto; display: flex; justify-content: space-between; gap: 8mm; color: var(--muted); font-size: 8pt; }
+
+    .pill { display: inline-block; padding: 1mm 2.2mm; border-radius: 99px; font-size: 7pt; font-weight: 800; letter-spacing: .04em; white-space: nowrap; text-transform: uppercase; }
+    .pass, .qualifies { color: var(--green); background: var(--green-soft); }
+    .partial, .claimed, .next { color: var(--amber); background: var(--amber-soft); }
+    .fail, .unknown, .unused { color: var(--red); background: var(--red-soft); }
+
+    .summary-line { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1pt solid var(--line); border-bottom: 1pt solid var(--line); }
+    .summary-line > div { padding: 3mm 3mm 3mm 0; }
+    .summary-line strong { display: block; font-size: 16pt; }
+    .summary-line span { color: var(--muted); font-size: 7.5pt; }
+    .track-list { display: grid; gap: 3mm; margin-top: 6mm; }
+    .track { display: grid; grid-template-columns: 40mm 43mm 1fr; gap: 4mm; padding: 4mm 0; border-top: 1pt solid var(--line); }
+    .track-name { font-weight: 800; line-height: 1.2; }
+    .track p { margin-bottom: 1.6mm; }
+    .required-rule { margin-top: 3mm; padding: 3mm 4mm; border-left: 3pt solid var(--accent); background: var(--accent-soft); }
+    .required-rule ol { margin: 2mm 0 0 5mm; padding-left: 4mm; }
+    .required-rule li { margin: 0 0 1.3mm; }
+
+    .score-table { table-layout: fixed; }
+    .score-table th { padding: 2mm; border-bottom: 1.5pt solid var(--ink); color: var(--muted); font-size: 7pt; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
+    .score-table td { padding: 3.2mm 2mm; border-bottom: 1pt solid var(--line); vertical-align: top; }
+    .score-table th:nth-child(1), .score-table td:nth-child(1) { width: 15mm; }
+    .score-table th:nth-child(2), .score-table td:nth-child(2) { width: 28mm; }
+    .score-table th:nth-child(3), .score-table td:nth-child(3) { width: 56mm; }
+    .score-table .title { display: block; margin-bottom: 1mm; font-weight: 800; }
+    .fix { color: var(--accent); font-weight: 700; }
+    .rewrite-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3mm; margin-top: 7mm; }
+    .rewrite { padding: 4mm; background: var(--wash); border-top: 2pt solid var(--accent); }
+    .where { margin-bottom: 2mm; color: var(--accent); font-size: 8pt; font-weight: 800; }
+
+    .panel-state { padding: 9mm; border: 1.5pt solid var(--accent); background: var(--accent-soft); }
+    .panel-state strong { display: block; margin-bottom: 2mm; font-size: 22pt; letter-spacing: -.025em; }
+    .question-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3mm; margin-top: 6mm; }
+    .question-list div { padding-top: 3mm; border-top: 1pt solid var(--line); }
+
+    .autonomy-lead { display: flex; align-items: flex-end; justify-content: space-between; gap: 8mm; }
+    .hold-count { color: var(--accent); font-size: 20pt; font-weight: 800; white-space: nowrap; }
+    .failure-list { margin-top: 5mm; }
+    .failure-row { display: grid; grid-template-columns: 24mm 1fr; gap: 4mm; padding: 4mm 0; border-top: 1pt solid var(--line); page-break-inside: avoid; break-inside: avoid; }
+    .failure-row p { margin-bottom: 1.5mm; }
+    .incident { margin-top: 2mm; padding: 2.5mm 3mm; color: #62211e; background: var(--red-soft); font-size: 8pt; }
+
+    .gap-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4mm; }
+    .gap-card { min-height: 53mm; padding: 5mm; border: 1pt solid var(--line); }
+    .gap-card h3 { display: flex; justify-content: space-between; gap: 4mm; }
+    .gap-card ul { margin: 3mm 0 0; padding-left: 4mm; }
+    .gap-card li { margin-bottom: 2mm; }
+    .repo-list { display: grid; gap: 4mm; }
+    .repo-note { padding: 5mm; border-top: 2pt solid var(--accent); background: var(--wash); }
+    .repo-note .number { float: right; color: var(--accent); font-size: 18pt; font-weight: 800; }
+    .source-row { display: grid; grid-template-columns: 24mm 1fr 18mm; gap: 4mm; padding: 3mm 0; border-top: 1pt solid var(--line); }
+    .source-row .kind { color: var(--accent); font-weight: 800; text-transform: capitalize; }
+    .break { overflow-wrap: anywhere; }
+    .checklist { columns: 2; column-gap: 8mm; margin: 4mm 0 0; padding: 0; list-style: none; }
+    .checklist li { position: relative; padding: 0 0 3mm 6mm; break-inside: avoid; }
+    .checklist li::before { content: "□"; position: absolute; left: 0; color: var(--accent); }
+
+    @media screen {
+      body { width: 210mm; margin: 24px auto; box-shadow: 0 8px 40px rgba(17, 25, 30, .18); }
+      .major { min-height: 297mm; padding: 18mm; border-bottom: 10px solid #d9dde0; }
+    }
+    @media print {
+      html, body { background: white; }
+    }
+  </style>
+</head>
+<body>
+  {% macro status_pill(status) -%}
+    {% if status == 'pass' %}<span class="pill pass">passes</span>
+    {% elif status == 'partial' %}<span class="pill partial">partly there</span>
+    {% elif status == 'fail' %}<span class="pill fail">does not pass</span>
+    {% else %}<span class="pill unknown">no evidence yet</span>{% endif %}
+  {%- endmacro %}
+
+  {% macro hackathon_stamp(value) -%}
+    {% if value == 'contender' %}hackathon contender
+    {% elif value == 'fixable_by_1830' %}fixable by 18:30
+    {% else %}not yet{% endif %}
+  {%- endmacro %}
+
+  {% macro business_stamp(value) -%}
+    {% if value == 'ready_to_charge' %}ready to charge
+    {% elif value == 'one_gap_away' %}one gap away
+    {% else %}not a business yet{% endif %}
+  {%- endmacro %}
+
+  <section class="major verdict page-shell">
+    <div class="verdict-top">
+      <span class="wordmark">Reality Check</span>
+      <span class="micro">{{ generated_at[:10] }} · {{ hackathon.rubric_version }}</span>
+    </div>
+    <div class="verdict-main">
+      <p class="project">{{ project }}</p>
+      <h1>{{ hackathon_stamp(stamps.hackathon) | trim | capitalize }}.</h1>
+      <p class="dek">The fastest honest route from what you have now to a submission that can compete.</p>
+
+      <div class="stamp-grid avoid">
+        <div class="stamp primary">
+          <span class="label">Hackathon</span>
+          <strong>{{ hackathon_stamp(stamps.hackathon) }}</strong>
+        </div>
+        <div class="stamp">
+          <span class="label">Autonomy</span>
+          <strong>{{ autonomy.k_hold }} of {{ autonomy.n }} hold</strong>
+        </div>
+        <div class="stamp">
+          <span class="label">Business</span>
+          <strong>{{ business_stamp(stamps.business) }}</strong>
+        </div>
+      </div>
+
+      <p class="eyebrow">Do these three things first</p>
+      <ol class="priority-list">
+        {% for item in top3 %}<li>{{ item }}</li>{% endfor %}
+      </ol>
+    </div>
+    <div class="verdict-bottom">
+      <span>{{ compounding.n_reviewed }} projects reviewed · currently ranked {{ compounding.rank }}</span>
+      <span>Generated for job {{ job }}</span>
+    </div>
+  </section>
+
+  <section class="major page-shell">
+    <header class="section-head">
+      <span class="section-no">02</span>
+      <p class="eyebrow">Prize tracks · decide before 18:30</p>
+      <h2>Where the sponsor money is</h2>
+      <p class="dek">Enter the tracks you can prove. Fix the claims you already make. If time is short, add the cheapest credible track next.</p>
+    </header>
+    <div class="summary-line avoid">
+      <div><strong>{{ hackathon.sponsors.qualifies|length }}</strong><span>qualifies</span></div>
+      <div><strong>{{ hackathon.sponsors.claimed_not_evidenced|length }}</strong><span>claimed, not evidenced</span></div>
+      <div><strong>{{ hackathon.sponsors.not_used|length }}</strong><span>not used</span></div>
+      <div><strong>{{ hackathon.sponsors.cheapest_to_add|length }}</strong><span>add next</span></div>
+    </div>
+
+    <div class="track-list">
+      {% for label, class_name, tracks in [
+        ('qualifies', 'qualifies', hackathon.sponsors.qualifies),
+        ('claimed not evidenced', 'claimed', hackathon.sponsors.claimed_not_evidenced),
+        ('add this next', 'next', hackathon.sponsors.cheapest_to_add),
+        ('not used', 'unused', hackathon.sponsors.not_used)
+      ] %}
+        {% for track in tracks %}
+        <article class="track">
+          <div><span class="pill {{ class_name }}">{{ label }}</span></div>
+          <div class="track-name">{{ track.name }}</div>
+          <div>
+            <p>{{ track.why | replace('weakest: ', '') | capitalize }}.</p>
+            <p class="fix"><span class="label">Do now</span><br>{{ track.fix | replace('Say or show it: ', '') }}</p>
+            {% if track.required %}
+            <div class="required-rule rule">
+              <span class="label">Required rule · prove each part</span>
+              <ol>{% for claim in track.claims %}<li>{{ claim.text }}</li>{% endfor %}</ol>
+            </div>
+            {% endif %}
+            <span class="id">{{ track.id }}</span>
+          </div>
+        </article>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="major page-shell">
+    <header class="section-head">
+      <span class="section-no">03</span>
+      <p class="eyebrow">Weighted judging</p>
+      <h2>How to win the judging</h2>
+      <p class="dek">Work from the top down. Weight tells you how much a fix can move the outcome; every fix names the screen or slide where it belongs.</p>
+    </header>
+    <table class="score-table">
+      <thead><tr><th>Weight</th><th>Verdict</th><th>What the judge sees</th><th>Exact fix</th></tr></thead>
+      <tbody>
+      {% for item in hackathon.judging|sort(attribute='weight', reverse=true) %}
+        <tr>
+          <td><strong>{{ item.weight }}×</strong></td>
+          <td>{{ status_pill(item.status) }}</td>
+          <td><span class="title">{{ item.title }}</span>{{ item.why | replace('weakest: ', '') }}<span class="id">{{ item.id }}</span></td>
+          <td class="fix">
+            {% if item.id == 'judge/terac-human-loop' %}<span class="label">Deck proof slide</span><br>
+            {% elif item.id == 'judge/revenue' %}<span class="label">Payment screen + deck revenue slide</span><br>
+            {% elif item.id == 'judge/autonomy' %}<span class="label">Architecture slide</span><br>
+            {% elif item.id == 'judge/viability' %}<span class="label">Business model slide</span><br>
+            {% elif item.id == 'judge/impressiveness' %}<span class="label">Live demo screen</span><br>
+            {% else %}<span class="label">Submission + tracks slide</span><br>{% endif %}
+            {{ item.fix | replace('Say or show it: ', '') }}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="rewrite-grid">
+      {% for item in hackathon.messaging[:3] %}
+      <article class="rewrite avoid">
+        <p class="where">{{ item.where }}</p>
+        <h3>{{ item.theme }}</h3>
+        <p>{{ item.rewrite | replace('Put one line on the first screen that makes this true: ', '') }}</p>
+        <span class="id">{{ item.id }}</span>
+      </article>
+      {% endfor %}
+    </div>
+
+    <div class="avoid" style="margin-top:7mm">
+      <p class="eyebrow">Do not lose on paperwork</p>
+      <ul class="checklist">{% for item in hackathon.submission_checklist['items'] %}<li>{{ item }}</li>{% endfor %}</ul>
+    </div>
+  </section>
+
+  <section class="major page-shell">
+    <header class="section-head">
+      <span class="section-no">04</span>
+      <p class="eyebrow">Three strangers · Terac general population</p>
+      <h2>What people said</h2>
+      <p class="dek">They see the first screen, the team’s one-line pitch, and the price—never this report. Their answers are an independent check on comprehension and trust.</p>
+    </header>
+    {% if evidence.humans.pending %}
+    <div class="panel-state avoid">
+      <strong>Responses pending</strong>
+      <p>Three strangers have not completed the Terac check yet. This report can be rendered now and updated when their answers arrive.</p>
+      <p class="micro">Current responses: {{ evidence.humans.n }} · Source: {{ evidence.humans.source or 'Terac study awaiting responses' }}</p>
+    </div>
+    {% else %}
+    <div class="panel-state avoid">
+      <strong>{{ evidence.humans.n }} people responded</strong>
+      <p>See the evidence supplied by the completed Terac panel.</p>
+    </div>
+    {% endif %}
+    <div class="question-list">
+      <div><span class="label">Could they explain it?</span><p>What does this company do, and who is it for?</p></div>
+      <div><span class="label">Would they pay?</span><p>Who would pay, and why—or why not?</p></div>
+      <div><span class="label">Would they trust it?</span><p>Would they hand over a card today?</p></div>
+      <div><span class="label">Does AI change the answer?</span><p>More, less, or equally willing to buy once told it is AI-run?</p></div>
+    </div>
+  </section>
+
+  <section class="major page-shell">
+    <header class="section-head autonomy-lead">
+      <div>
+        <p class="eyebrow">Seven real failure modes</p>
+        <h2>Can it run autonomously?</h2>
+        <p class="dek">A pass means the safeguard is evidenced, not merely promised.</p>
+      </div>
+      <div class="hold-count">{{ autonomy.k_hold }} of {{ autonomy.n }} hold</div>
+    </header>
+    <div class="failure-list">
+      {% for item in autonomy['items'] %}
+      <article class="failure-row">
+        <div>{{ status_pill(item.status) }}</div>
+        <div>
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.plain }}</p>
+          <p class="fix"><span class="label">What would hold</span><br>{{ item.fix | replace('Say or show it: ', '') }}</p>
+          {% if item.status == 'fail' and item.evidence_public %}
+          <p class="incident"><strong>Public incident:</strong> {{ item.evidence_public[0].what }} · <a href="{{ item.evidence_public[0].url }}">source</a></p>
+          {% endif %}
+          <span class="id">{{ item.id }}</span>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="major page-shell">
+    <header class="section-head">
+      <span class="section-no">06</span>
+      <p class="eyebrow">Four commercial gaps</p>
+      <h2>Is it a business?</h2>
+      <p class="dek">A product becomes a business when a named buyer can pay, trust the purchase, prove demand, and repeat the loop.</p>
+    </header>
+    <div class="gap-grid">
+      {% for gap_key, gap_title, gap_prompt in [
+        ('payer', 'A buyer with a painful job', 'Name the person who pays, the problem they already spend money or time on, and the first channel you can reach them through.'),
+        ('take_money', 'A safe path to payment', 'Show one working payment path, the price, the cost to serve, and the trust basics a stranger needs before paying.'),
+        ('stranger_proof', 'Proof from strangers', 'Use the blind Terac responses to show who understood it, who would pay, and what changed after their feedback.'),
+        ('loop', 'A repeatable learning loop', 'State the next paid test, the number that decides success, and the condition that makes you stop or change direction.')
+      ] %}
+      {% set gap_items = findings|selectattr('gap', 'equalto', gap_key)|rejectattr('status', 'equalto', 'pass')|list %}
+      <article class="gap-card card">
+        <h3>{{ gap_title }} {% if gap_items %}{{ status_pill(gap_items[0].status) }}{% else %}<span class="pill pass">holds</span>{% endif %}</h3>
+        <p>{{ gap_prompt }}</p>
+        {% if gap_items %}
+        <ul>
+          {% for item in gap_items[:2] %}
+          <li>{{ item.claim }}. <span class="fix">{{ item.fix | replace('Say or show it: ', '') }}</span><span class="id">{{ item.id }}</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}<p>No unresolved finding in this gap.</p>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if 'repo' in sources.source_kinds %}
+  <section class="major page-shell">
+    <header class="section-head">
+      <span class="section-no">07</span>
+      <p class="eyebrow">Repository supplied</p>
+      <h2>Three notes for your coding agent</h2>
+      <p class="dek">These are the highest-leverage steps from hackathon build to something a stranger can run, use, and trust.</p>
+    </header>
+    <div class="repo-list">
+      {% for item in hackathon.technical[:3] %}
+      <article class="repo-note avoid">
+        <span class="number">0{{ loop.index }}</span>
+        <h3>{{ item.title }}</h3>
+        <p>{{ item.why | replace('weakest: ', '') | capitalize }}.</p>
+        <p class="fix"><span class="label">Hand this fix to your coding agent</span><br>{{ item.fix | replace('Say or show it: ', '') }}</p>
+        <span class="id">{{ item.id }}</span>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="major page-shell">
+    <header class="section-head">
+      <span class="section-no">08</span>
+      <p class="eyebrow">Audit trail</p>
+      <h2>What this report read</h2>
+      <p class="dek">Every verdict comes from the submitted material below. Silence is treated as missing evidence, not as proof that a feature does not exist.</p>
+    </header>
+    <div>
+      {% for source in evidence.read %}
+      <div class="source-row avoid">
+        <div class="kind">{{ source.kind }}</div>
+        <div class="break">{{ source.ref }}{% if source.meta.title %}<br><span class="micro">{{ source.meta.title }}</span>{% endif %}</div>
+        <div class="micro">{{ source.chars }} chars</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="summary-line avoid" style="margin-top:10mm">
+      <div><strong>{{ evidence.judged_by.n_evaluators }}</strong><span>agent evaluators</span></div>
+      <div><strong>{{ evidence.humans.n }}</strong><span>human responses</span></div>
+      <div><strong>{{ hackathon.model_calls }}</strong><span>model calls</span></div>
+      <div><strong>{{ findings|length }}</strong><span>findings checked</span></div>
+    </div>
+    <div class="panel-state avoid" style="margin-top:10mm">
+      <span class="label">Re-run after fixing</span>
+      <h3 style="margin-top:2mm">Submit the same links again.</h3>
+      <p>The next report will use the same finding ids, making fixed and regressed items easy to compare.</p>
+      <p class="micro break">Live URL: {{ sources.live_url }} · Job {{ job }}</p>
+    </div>
+  </section>
+</body>
+</html>
