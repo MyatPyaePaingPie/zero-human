@@ -24,11 +24,11 @@ Never ask them to judge code, architecture, or "is this a good idea".
 ## 2. What they see on /rate/{job} (the brief, one screen)
 Header: `Read this like you just stumbled on it. Then answer honestly. We are testing the company, not you.`
 
-Stimulus, in this order, nothing else:
-1. The headline and first screen (screenshot of the landing page hero, or the first slide, or the first
-   line of the README, whichever exists first in that order).
-2. The one-line pitch in the team's own words.
-3. The price, if any is stated. If none: `No price is shown.`
+Stimulus: everything we have, in this order, each labeled, one screen:
+1. **Their landing page** first screen (hero screenshot, or the extracted headline + subhead + CTA + price) when a URL was given.
+2. **Their first slide** (image if the deck exports, else its text) when slides were given.
+3. **Their README** title + first paragraph only when neither of the above exists (a repo alone means the README is the primary source).
+Then the one-line pitch in the team's words, and the price line (`No price is shown.` if none).
 
 No repo, no full deck, no probe results, no model output.
 
