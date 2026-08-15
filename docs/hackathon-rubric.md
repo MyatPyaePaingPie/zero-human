@@ -46,8 +46,8 @@ is context for humans. Ids are stable and become finding ids in the report.
     },
     {
       "id": "judge/terac-human-loop",
-      "title": "Real human input via Terac made it measurably better (required rule)",
-      "weight": 3,
+      "title": "Terac human loop, the required rule and the host's own bar (fails = not a contender)",
+      "weight": 4,
       "claims": [
         "The project calls the Terac MCP or API to recruit real people during the hackathon",
         "The people respond to something concrete (use, rate, rank, label, compare, or judge an artifact), not a general survey",
@@ -411,6 +411,18 @@ is context for humans. Ids are stable and become finding ids in the report.
         "id": "agent/engineer",
         "persona": "an engineer reviewing the repo for vibe-coded fragility"
       }
+    ]
+  },
+  "terac_first": {
+    "note": "Aria 15:00: focus on Terac more than anything. Terac is host, the required rule, and its network IS our human layer. Every Reality Check job launches a Terac general-population study (n=3, auto_approve, activity task pointing at our /rate page so we own the answers). The report's Terac row is first and itemized. Our own submission must show a before/after number from Terac respondents.",
+    "our_own_study": {
+      "launch": "now, on our own landing page + pitch, general population, n=5, auto_approve",
+      "measure": "share who can say what we do + share who would pay, before and after we rewrite the hero from their answers",
+      "show": "slide with before/after numbers and two quotes"
+    },
+    "human_steps": [
+      "redeem the $100 Terac hackathon credit from the Notion guidebook (balance was $25)",
+      "ask Jack (Terac cofounder, on the floor): cheapest role for 'read a page, answer 3 yes/no', realistic ETA today, whether $100 buys 5+ responses"
     ]
   }
 }
