@@ -114,7 +114,7 @@ class VoiDecision(BaseModel):
 
 class Verdict(BaseModel):
     job_id: str
-    status: Literal["pending_payment", "evaluating", "awaiting_humans", "settled", "failed"]
+    status: Literal["pending_payment", "evaluating", "awaiting_humans", "settled", "failed", "cancelled"]
     verdict: Literal["yes", "no", "undecided"]
     p: float
     confidence: float
