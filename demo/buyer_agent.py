@@ -49,7 +49,7 @@ def write(product: str, feedback: list[str] | None = None) -> str:
 
 def judge(base: str, copy: str, stakes: float, budget: float, paid: float) -> dict:
     r = httpx.post(f"{base}/judge", timeout=180, headers={"X-RC-Paid": str(paid)} if paid else {},
-                   json={"input": copy, "sku": "reality_check", "cost_if_wrong_usd": stakes,
+                   json={"input": copy, "sku": "reality_check", "evidence_standard": "voi_routed", "cost_if_wrong_usd": stakes,
                          "max_budget_usd": budget, "buyer_id": "agent:landing-writer"})
     r.raise_for_status()
     return r.json()

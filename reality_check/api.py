@@ -155,6 +155,11 @@ async def rate_submit(job_id: str, request: Request):
     form = await request.form()
     src = str(form.get("src", "local"))
     respondent = str(form.get("respondent", "")) or uuid.uuid4().hex[:12]
+    job = store.get_job(job_id)
+    prev = (job["request"].get("before_job_id") if job else None)
+    if prev and any(a["respondent"] == respondent for a in store.human_answers(prev)):
+        store.event(job_id, "human.rejected", {"reason": "judged the previous version", "before_job_id": prev})
+        return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:18px system-ui;margin:3rem'>You already judged the previous version; this round needs fresh eyes. Thank you.</p>")
     free_text = str(form.get("free_text", ""))
     n = int(form.get("n_claims", 1))
     accepted = 0

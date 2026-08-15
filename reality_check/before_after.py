@@ -61,6 +61,13 @@ def compare(before_job_id: str, after_job_id: str) -> dict:
         decision, why = "invalid", "after job has no human answers"
     elif bj and aj and bj["request"]["input"] == aj["request"]["input"]:
         decision, why = "invalid", "before and after inputs are identical"
+    elif bj and aj and (bj["request"]["sku"], bj["request"]["claims"], bj["request"].get("personas")) != \
+            (aj["request"]["sku"], aj["request"]["claims"], aj["request"].get("personas")):
+        decision, why = "invalid", "before and after are not comparable (sku, claims, or personas differ)"
+    else:
+        shared = {x["respondent"] for x in store.human_answers(before_job_id)} & {x["respondent"] for x in store.human_answers(after_job_id)}
+        if shared:
+            decision, why = "invalid", f"{len(shared)} respondent(s) judged both versions; after-job needs fresh eyes"
 
     per_claim = []
     for i, bc in enumerate(b.claims):
@@ -72,7 +79,7 @@ def compare(before_job_id: str, after_job_id: str) -> dict:
                           "before_verdict": bc.verdict, "after_verdict": ac.verdict if ac else None})
     improved = [c for c in per_claim if c["delta"] is not None and c["delta"] > 0]
     result = {
-        "decision": decision, "why": why,
+        "decision": decision, "why": why, "locked_at": lk[1] if lk else None,
         "before": {"job_id": before_job_id, "p": b.p, "verdict": b.verdict, "n_humans": b.n_humans, "hash": locked},
         "after": {"job_id": after_job_id, "p": a.p, "verdict": a.verdict, "n_humans": a.n_humans, "hash": _vhash(after_job_id)},
         "delta_p": round(a.p - b.p, 3), "claims_improved": len(improved), "claims_total": len(per_claim),

@@ -5,7 +5,13 @@ gate), buys the cheapest sufficient evidence (model ensemble, in-room humans, Te
 population, Terac expert), and returns a structured verdict with the minority view. Built at the
 Zero Human Company hackathon, 2026-08-15. Team repo: MyatPyaePaingPie/zero-human.
 
-Room SKU: "$8: five real people tell you what your page/pitch says, plus the verdict."
+One sentence: reality check sells evidence-routing under uncertainty: it decides whether another
+model, a crowd, or an expert is worth paying for before money gets attached to a claim.
+
+Room SKU: "$8, human-verified: at least three real people tell you what your page/pitch says, more
+when the models disagree, plus the verdict and the minority view." Evidence standards are floors
+the router must satisfy at the cheapest arm (`voi_routed` for agent buyers, `human_backed` for room
+SKUs, `expert_backed` for Terac experts); the VOI math still runs and the reason line shows both.
 
 ## Run
 ```

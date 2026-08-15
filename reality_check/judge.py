@@ -64,6 +64,29 @@ def _judge_claim(idx: int, claim: str, text: str, personas: list[str] | None) ->
     }, ev.cost_usd
 
 
+HUMAN_ARMS = ("linq_panel", "terac_general", "terac_expert")   # cheapest first
+EXPERT_ARMS = ("terac_expert",)
+
+
+def _apply_standard(standard: str, decision, arms, max_budget_usd: float, max_latency_s: float | None):
+    """The evidence standard is a FLOOR, not an arm choice. VOI math still ran (and is shown);
+    if its pick does not satisfy the floor, choose the cheapest arm that does, within deadline.
+    Budget is not a reason to sell an unbacked verdict: the free local page satisfies human_backed."""
+    if standard == "voi_routed":
+        return decision
+    need = EXPERT_ARMS if standard == "expert_backed" else HUMAN_ARMS
+    if decision.buy and decision.arm in need:
+        return decision.model_copy(update={"reason": f"standard {standard} satisfied by VOI pick: " + decision.reason})
+    by_name = {a.name: a for a in arms}
+    for name in need:
+        a = by_name.get(name)
+        if a and (max_latency_s is None or a.latency_s <= max_latency_s):
+            return decision.model_copy(update={"buy": True, "arm": name,
+                                               "reason": f"standard {standard} requires humans; cheapest satisfying arm = {name} ${a.price_usd:.2f}; VOI alone said: " + decision.reason})
+    return decision.model_copy(update={"buy": True, "arm": need[0],
+                                       "reason": f"standard {standard}: no arm can return before the deadline, falling to the free local page; VOI alone said: " + decision.reason})
+
+
 def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None) -> Verdict:
     job_id = job_id or uuid.uuid4().hex[:12]
     store.put_job(job_id, req.buyer_id, "evaluating", req.model_dump(), {})
@@ -91,9 +114,7 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     )
     if max_latency is not None:
         decision = decision.model_copy(update={"reason": decision.reason + f" (deadline in {max_latency/60:.0f} min)"})
-    if req.force_humans and not decision.buy:
-        decision = decision.model_copy(update={"buy": True, "arm": decision.arm or "linq_panel",
-                                               "reason": "humans sold to buyer (force_humans); VOI gate bypassed: " + decision.reason})
+    decision = _apply_standard(req.evidence_standard or "voi_routed", decision, arms, req.max_budget_usd, max_latency)
     use_free_panel = False
     if decision.buy and decision.arm:
         # company spend authority is code (envelope), never the buyer's flag or free text

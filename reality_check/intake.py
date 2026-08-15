@@ -21,7 +21,7 @@ def submit(req: IntakeRequest) -> Verdict:
             + ("\n\nINVARIANTS:\n- " + "\n- ".join(req.invariants) if req.invariants else "")
             + "\n\n(The verifier receives claims and invariants only. No builder reasoning.)")
     jr = JudgeRequest(input=text, claims=req.claims, sku="verified_autonomous", cost_if_wrong_usd=200.0,
-                      max_budget_usd=10.0, buyer_id=f"team:{req.team}", force_humans=True,
+                      max_budget_usd=10.0, buyer_id=f"team:{req.team}", evidence_standard="human_backed",
                       human_question="Based on what you can see at the URL, does this claim hold? Yes or no, and what convinced you.")
     v = judge.start(jr, paid_usd=req.paid_usd)
     # objective evidence: Replay QA crawls the live URL while humans judge the claims

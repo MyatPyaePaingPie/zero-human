@@ -40,7 +40,11 @@ class JudgeRequest(BaseModel):
     desired_confidence: float = Field(default=0.8, ge=0.5, le=0.99)
     cost_if_wrong_usd: float = Field(default=50.0, ge=0.0, description="Buyer's stake: what acting on a wrong verdict costs.")
     buyer_id: str = "anonymous"
-    force_humans: bool = Field(default=False, description="Room SKU: humans were sold, skip the VOI gate and always launch a panel.")
+    evidence_standard: Literal["voi_routed", "human_backed", "expert_backed"] | None = Field(
+        default=None, description="Floor the router must satisfy (defaults per SKU). voi_routed: buy only what VOI says pays. "
+        "human_backed: not final until >=3 real people judged; router still picks the cheapest satisfying arm. expert_backed: Terac expert.")
+    force_humans: bool = Field(default=False, description="Deprecated alias for evidence_standard=human_backed.")
+    before_job_id: str | None = Field(default=None, max_length=32, description="Before/after: the earlier job this one is measured against; its respondents are refused here.")
 
     @model_validator(mode="after")
     def _normalise_claims(self) -> "JudgeRequest":
@@ -52,6 +56,10 @@ class JudgeRequest(BaseModel):
         if not self.claims:
             raise ValueError("at least one claim is required")
         self.claim = self.claims[0]
+        if self.evidence_standard is None:
+            from reality_check.skus import default_standard
+            self.evidence_standard = "human_backed" if self.force_humans else default_standard(self.sku)
+        self.force_humans = self.evidence_standard != "voi_routed"
         if self.personas:
             from reality_check.evaluators import PERSONAS
             bad = [x for x in self.personas if x not in PERSONAS]

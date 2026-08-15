@@ -141,3 +141,27 @@ def test_intake_without_replay_key_is_dry():
     jid = r.json()["job_id"]
     kinds = [e["kind"] for e in c.get("/events?limit=50").json() if e["job_id"] == jid]
     assert "replay.dry" in kinds and "Replay" not in r.json()["summary"]
+
+
+def test_standard_is_a_floor_not_a_bypass():
+    r = c.post("/judge", json={"input": "Crystal clear text about socks.", "claim": "It is clear", "sku": "reality_check",
+                               "cost_if_wrong_usd": 1}, headers={"X-RC-Paid": "8"}).json()
+    v = r["voi"]
+    assert r["status"] == "awaiting_humans" and v["buy"] and v["arm"] == "linq_panel" and "standard human_backed" in v["reason"]
+    r2 = c.post("/judge", json={"input": "Crystal clear text about socks.", "claim": "It is clear", "sku": "reality_check",
+                                "evidence_standard": "voi_routed", "cost_if_wrong_usd": 1}).json()
+    assert r2["voi"]["buy"] is False and r2["status"] == "settled"
+
+
+def test_before_after_refuses_shared_respondents():
+    b = c.post("/judge", json={"input": "v1 copy", "claim": "It is clear", "sku": "reality_check"}, headers={"X-RC-Paid": "8"}).json()
+    for i in range(3):
+        c.post(f"/rate/{b['job_id']}", data={"c0": "no", "n_claims": "1", "src": "local", "respondent": f"p{i}"})
+    c.post(f"/before_after/lock/{b['job_id']}")
+    a = c.post("/judge", json={"input": "v2 copy", "claim": "It is clear", "sku": "reality_check", "before_job_id": b["job_id"]}, headers={"X-RC-Paid": "8"}).json()
+    rej = c.post(f"/rate/{a['job_id']}", data={"c0": "yes", "n_claims": "1", "src": "local", "respondent": "p0"})
+    assert "previous version" in rej.text
+    for i in range(3):
+        c.post(f"/rate/{a['job_id']}", data={"c0": "yes", "n_claims": "1", "src": "local", "respondent": f"q{i}"})
+    cmp_ = c.get(f"/before_after/{b['job_id']}/{a['job_id']}").json()
+    assert cmp_["decision"] == "measured" and cmp_["locked_at"] and cmp_["delta_p"] > 0

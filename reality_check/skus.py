@@ -8,12 +8,14 @@ from __future__ import annotations
 SKUS: dict[str, dict] = {
     "reality_check": {
         "price_usd": 8.0,
+        "evidence_standard": "human_backed",
         "claims": ["A first-time visitor can tell what this company does within ten seconds"],
         "personas": ["skeptic", "operator", "outsider", "buyer", "designer"],
         "human_question": "After reading this, can you tell what this company does? Say yes or no, then say in one line what you think it does.",
     },
     "demand_check": {
         "price_usd": 10.0,
+        "evidence_standard": "human_backed",
         "claims": [
             "payer: a specific person or role who would pay for this is named",
             "painful job: the problem is painful enough that people already spend money or hours on it today",
@@ -30,6 +32,7 @@ SKUS: dict[str, dict] = {
     },
     "verified_autonomous": {
         "price_usd": 10.0,
+        "evidence_standard": "human_backed",
         "claims": [],  # supplied by the audited team; verifier receives claims + invariants, never reasoning
         "personas": ["skeptic", "operator"],
         "human_question": "Does this claim hold, based on what you can see? Yes or no, and what convinced you.",
@@ -48,6 +51,11 @@ def default_personas(sku: str) -> list[str] | None:
 
 def default_human_question(sku: str) -> str | None:
     return SKUS.get(sku, {}).get("human_question")
+
+
+def default_standard(sku: str) -> str:
+    """Evidence floor sold with the SKU. Room SKUs are human-backed; agent buyers are VOI-routed."""
+    return SKUS.get(sku, {}).get("evidence_standard", "voi_routed")
 
 
 def price(sku: str) -> float:
