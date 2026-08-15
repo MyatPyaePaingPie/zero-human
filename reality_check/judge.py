@@ -192,8 +192,16 @@ def _first_screen(s: dict) -> str:
     if not text:
         return ""
     if kind == "page":
-        title = (s.get("meta") or {}).get("title") or ""
-        head = text[:400].strip()
+        title = ((s.get("meta") or {}).get("title") or "").strip()
+        head = text
+        if title:
+            # visible text usually opens with the title (title tag, og:title, h1): show it once
+            while head.startswith(title):
+                head = head[len(title):].lstrip(" \n-|:")
+            head = head.replace(title, "").replace("  ", " ").strip(" \n-|:")
+        head = head[:320]
+        if len(text) > 320:
+            head = head.rsplit(" ", 1)[0] + "..."
         return (title + "\n" + head).strip() if title else head
     if kind == "deck":
         first = text.split("--- slide 2 ---", 1)[0]

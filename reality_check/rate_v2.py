@@ -141,7 +141,7 @@ def _media(kind: str, link: str) -> str:
     if not link.startswith("http"):
         return ""
     if kind == "page":
-        return (f'<img class=shot loading=lazy src="{html.escape(_THUMB + link)}" alt="their landing page, first screen" '
+        return (f'<img class=shot src="{html.escape(_THUMB + link)}" alt="their landing page, first screen" '
                 f'onerror="this.style.display=\'none\'">')
     if kind == "deck":
         m = _GSLIDES_RE.search(link)
