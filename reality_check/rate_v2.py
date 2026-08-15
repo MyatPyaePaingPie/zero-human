@@ -99,6 +99,10 @@ def stimulus(job: dict) -> list[dict]:
         if s:
             out.append({"kind": kind, "label": _LABELS[kind], "text": s["first_screen"],
                         "link": s.get("link") or s.get("ref") or "", "link_label": _LINK_LABELS[kind]})
+    deck = (job.get("request") or {}).get("deck") or ""
+    if not any(o["kind"] == "deck" for o in out) and deck.startswith("http"):
+        # slides with no text layer (image slides): still embed the deck + link
+        out.append({"kind": "deck", "label": _LABELS["deck"], "text": "", "link": deck, "link_label": _LINK_LABELS["deck"]})
     url = (job.get("request") or {}).get("url") or ""
     if not any(o["kind"] == "page" for o in out) and url.startswith("http"):
         # page text could not be read (blocked, empty, slow): still show the screenshot + link
