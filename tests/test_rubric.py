@@ -75,7 +75,7 @@ class _FakeClient:
             if i == 1:
                 items.append({"idx": "not-a-number", "p": 0.9})
                 continue
-            items.append({"idx": i, "p": 0.8, "confidence": 0.7, "reasoning": f"ok {i}", "side": "yes"})
+            items.append({"idx": i, "verdict": "yes", "quote": "input", "reasoning": f"ok {i}"})
         content = _json.dumps({"claims": items})
         return _FakeResponse({"choices": [{"message": {"content": content}}],
                               "usage": {"prompt_tokens": 100, "completion_tokens": 50}})
@@ -99,7 +99,9 @@ def test_batch_makes_one_post_per_persona_and_malformed_idx_only_skips_itself(mo
     assert len(out) == len(claims)
     for i, r in enumerate(out):
         sides = [v.forecast.side for v in r.votes]
-        assert sides == ["yes", "yes"] and r.votes[0].forecast.p == 0.8
+        # verdict yes -> p 1.0 (derived, not verbalized); the quote is verified against the bundle
+        assert sides == ["yes", "yes"] and r.votes[0].forecast.p == 1.0
+        assert r.votes[0].forecast.verdict == "yes" and r.votes[0].forecast.quote == "input"
     assert sum(r.cost_usd for r in out) > 0
 
 
@@ -235,5 +237,7 @@ def test_full_run_model_call_count_is_bounded(monkeypatch):
     # + hackathon run must stay near that or the judge takes >1 min on a cold key.
     import math
     effective = sum(personas * math.ceil(n / evaluators.MAX_CLAIMS_PER_CALL) for n, personas in calls)
-    assert effective <= 36, f"effective model calls per full run: {effective}"
+    # 40 at MAX_CLAIMS_PER_CALL=8 (was 36 at 12): small numbered batches beat position bias, and
+    # OpenAI (now primary) has no 30 RPM ceiling.
+    assert effective <= 40, f"effective model calls per full run: {effective}"
     assert elapsed < 2.0, f"stub-mode full check took {elapsed:.2f}s"

@@ -18,6 +18,12 @@ class Forecast(BaseModel):
     refuted_by: list[str] = Field(default_factory=list)
     side: Side = "skip"
     forecast_mean: float | None = None
+    # evidence-grounded judging (docs/specs/judging-design.md): the panel returns a verdict plus a
+    # verbatim span from the bundle. p is derived (yes=1.0, no=0.0, not_evidenced=0.5) so every
+    # existing consumer keeps working unchanged.
+    verdict: Literal["yes", "no", "not_evidenced"] | None = None
+    quote: str | None = Field(default=None, max_length=400)
+    unstable: bool = Field(default=False, description="Position-bias re-run flipped this verdict.")
 
 
 class JudgeRequest(BaseModel):
