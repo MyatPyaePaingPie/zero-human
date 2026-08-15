@@ -17,3 +17,6 @@ Deferred: Terac real launch is a ~5pm decision by Aria ($13.50 of $25). Superser
 
 ## 12:30 update
 Aria moved all judgement to GitHub issues (#1-#18, epic #18) and adopted the matra execution protocol; I filed the DAG plan (`_meta/plans/2026-08-15-issue-queue-dag.md`) and a status-first handoff (`_meta/handoff.md`). Started writing lenses.py before being told to stop; left untracked, noted. Sweep of 20 PH launches ran end to end once (15/19 clear) then was wiped by a redeploy on the free tier; re-queued. Linq inbound loop live and unproven (nobody texted yet). Reviewer round 4/5: all code findings closed; only operational items remain.
+
+## 12:45 cwd incident (second of the day)
+Wrote the DAG plan, handoff, and chronicle update while the shell cwd was still in blinkbuild/matra-suite (I had cd'd there to read the protocol). The plan commit reached matra-suite main; reverted with a normal revert commit (f77588d), stray files removed, and I briefly reset a cron commit on the Vaults session branch by misreading HEAD, restored with --soft to the same sha, remote back in place. Lesson recorded: every compound Bash command starts with an absolute cd into zero-human, no exceptions.
