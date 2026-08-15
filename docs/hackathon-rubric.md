@@ -6,6 +6,10 @@ sources: Granola transcript "Zero Human Hackathon" 2026-08-15 09:29 (opening sta
 ---
 # Hackathon rubric: Zero Human Company Hackathon by Terac, 2026-08-15
 
+**Canonical source: the organizers' guidebook**, vendored at `docs/research/guidebook-zero-human-hackathon.pdf`
+with full text in `docs/research/guidebook.md`. This rubric is derived from it; when they disagree, the guidebook wins.
+The opening-statements transcript adds only what sponsors said on stage.
+
 What this hackathon rewards, as binary claims a model (and a stranger) can judge from a team's repo,
 slides, and landing page. The one fenced JSON block below is the machine-readable rubric; the prose
 is context for humans. Ids are stable and become finding ids in the report.
@@ -61,7 +65,7 @@ is context for humans. Ids are stable and become finding ids in the report.
       "title": "Real revenue today through Stripe (required for Best Agent-Run Company)",
       "weight": 3,
       "claims": [
-        "There is a Stripe payment link or checkout a stranger can pay through right now",
+        "There is ONE Stripe Payment Link a stranger can pay through right now, and it is the link submitted to the organizers",
         "A price is stated in dollars",
         "The pitch reports revenue earned during the hackathon (a number, even if small)",
         "A stranger can go from landing page to paid in under a minute without talking to the team",
@@ -113,7 +117,8 @@ is context for humans. Ids are stable and become finding ids in the report.
         "The human task is one an agent could not do or should not decide alone (judgment, taste, physical world, verification)",
         "The output of the humans changes the product or the verdict, and the pitch shows the delta",
         "The human task is one of the kinds Terac named on stage: a physical-world task, a computer-use task an agent cannot do, an engineer getting an agent unstuck, or expert judgment",
-        "The pitch reports how many people responded and how fast (Terac's pitch is minutes, not hours)"
+        "The pitch reports how many people responded and how fast (Terac's pitch is minutes, not hours)",
+        "The team redeemed the Terac hackathon credit and launched with it (guidebook redemption link), so the study is real, not dry-run"
       ],
       "evidence_hints": [
         "terac",
@@ -129,9 +134,11 @@ is context for humans. Ids are stable and become finding ids in the report.
       "name": "Stripe (required for payments)",
       "required": true,
       "claims": [
-        "Payments run through Stripe (payment link, checkout, or Agent Pay)",
-        "The Stripe account is an individual account created for this hackathon and its info was submitted",
-        "The pitch mentions Stripe Atlas or incorporation as the path beyond the hackathon (bonus, not required)"
+        "Payments run through Stripe via ONE Payment Link created for the hackathon (the same link for every transaction; a new link mid-day breaks the organizers' revenue tracking)",
+        "The Stripe account is a personal/individual account (no business verification needed) and its details were submitted to the organizers",
+        "A restricted read-only API key (rk_, Balance + Charges = Read, everything else None) was created and submitted; the secret key (sk_) was never shared",
+        "If variable pricing, the Payment Link uses 'Customer chooses price' rather than many links",
+        "The pitch mentions Stripe Atlas as the incorporation path beyond the hackathon (bonus)"
       ],
       "evidence_hints": [
         "stripe",
@@ -151,7 +158,9 @@ is context for humans. Ids are stable and become finding ids in the report.
         "The text channel is where a customer or a human-in-the-loop actually acts (buys, votes, replies), not a notification only",
         "It uses a rich iMessage feature (tapbacks, reactions, iMessage Apps card, Agent Pay checkout, group chat)",
         "The text thread is multiplayer where it helps (a group chat where customers debate a purchase together, as Linq suggested on stage)",
-        "Checkout happens in the thread via Agent Pay / Stripe, money settling to the team's Stripe"
+        "Checkout happens in the thread via Agent Pay / Stripe, money settling to the team's Stripe",
+        "Messaging primitives are used as UI, per Linq's guide: a tapback is a vote, a typing indicator is a loading state, a group thread is a multiplayer lobby",
+        "The Linq flow is specific to a vertical, not a generic assistant bot"
       ],
       "evidence_hints": [
         "linq",
@@ -424,7 +433,31 @@ is context for humans. Ids are stable and become finding ids in the report.
       "redeem the $100 Terac hackathon credit from the Notion guidebook (balance was $25)",
       "ask Jack (Terac cofounder, on the floor): cheapest role for 'read a page, answer 3 yes/no', realistic ETA today, whether $100 buys 5+ responses"
     ]
-  }
+  },
+  "submission_checklist": {
+    "note": "From guidebook pages 14-15 and 27-31; a team that misses any of these is ineligible for the main prizes regardless of quality.",
+    "items": [
+      "Uses the Terac MCP with real human input collected today, measurable before/after",
+      "Personal Stripe account created",
+      "One Payment Link created and used for every transaction",
+      "Restricted read-only key (rk_, Balance+Charges Read) created",
+      "Account details + Payment Link + rk_ key submitted to organizers",
+      "Project submitted through the guidebook link before lock (18:30 per stage; guidebook schedule says 18:45)",
+      "Studies launched to the General Population"
+    ]
+  },
+  "partners_no_track": [
+    "Whop",
+    "Dodo Payments (Merchant of Record)",
+    "sandbox0",
+    "Solari by Pinetree Research (headless browsers/sandboxes)",
+    "Interview Cake",
+    "Nucleate",
+    "SignalFire",
+    "1517 Fund",
+    "Solo Founders",
+    "InterviewPay"
+  ]
 }
 ```
 

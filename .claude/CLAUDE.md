@@ -3,7 +3,7 @@
 Judgment for agents. One paste or URL in, a full report out: lenses of evidence, a stamp, a route to
 money, an agent-facing fix doc. Thesis: we sell evidence-routing under uncertainty; the router decides
 which evidence (probe, model, crowd, expert) is worth paying for before money attaches to a claim.
-Read `README.md`, then `docs/working-agreement.md`. Rules in `.claude/rules/` are always on.
+Read `README.md`, then `docs/working-agreement.md`. The organizers guidebook (`docs/research/guidebook.md`, PDF beside it) is the canonical rubric source; `docs/hackathon-rubric.md` derives from it. Rules in `.claude/rules/` are always on.
 
 ## Seats (who does what)
 - **Myat (repo owner): business.** Pricing, storefront copy, GTM, human budgets. `area:business`.
