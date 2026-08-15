@@ -47,6 +47,7 @@ class JudgeRequest(BaseModel):
     force_humans: bool = Field(default=False, description="Deprecated alias for evidence_standard=human_backed.")
     before_job_id: str | None = Field(default=None, max_length=32, description="Before/after: the earlier job this one is measured against; its respondents are refused here.")
     notify_phone: str | None = Field(default=None, max_length=20, description="E.164 phone; the verdict is texted here (Linq) when the job settles.")
+    url: str | None = Field(default=None, max_length=500, description="Live URL: probes.py runs objective checks (SEO/accessibility/security/agent-ready) against it in the background.")
 
     @model_validator(mode="after")
     def _normalise_claims(self) -> "JudgeRequest":

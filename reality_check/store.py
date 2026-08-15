@@ -61,6 +61,21 @@ def put_job(job_id: str, buyer_id: str, status: str, request: dict, state: dict)
         )
 
 
+def patch_job_state(job_id: str, key: str, value) -> None:
+    """Read-modify-write a single state key, atomically under the same lock put_job uses. A
+    background writer (e.g. the probe thread in judge.py) that only owns one key must never
+    clobber the rest of state with a stale wholesale write, and must never be clobbered by one
+    either -- so this reads fresh from the DB at write time, not from whatever the caller last
+    saw. No-op if the job no longer exists."""
+    with _lock, conn() as c:
+        row = c.execute("SELECT status, state FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            return
+        state = json.loads(row["state"])
+        state[key] = value
+        c.execute("UPDATE jobs SET updated_at=?, state=? WHERE job_id=?", (now(), json.dumps(state), job_id))
+
+
 def get_job(job_id: str) -> dict | None:
     with conn() as c:
         r = c.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()

@@ -11,10 +11,11 @@ Status machine per job:
 from __future__ import annotations
 
 import os
+import threading
 import uuid
 from datetime import datetime, timezone
 
-from reality_check import evaluators, linq_client, panels, replay_client, skus, store
+from reality_check import evaluators, linq_client, panels, probes, replay_client, skus, store
 from reality_check.core import consensus, voi
 from reality_check.core.brier import brier
 from reality_check.core.models import ClaimVerdict, JudgeRequest, Verdict, VoiDecision
@@ -89,6 +90,37 @@ def _apply_standard(standard: str, decision, arms, max_budget_usd: float, max_la
                                        "reason": f"standard {standard}: no recruiting arm can return before the deadline; free local page (local_panel); VOI alone said: " + decision.reason})
 
 
+def _launch_probes(job_id: str, url: str) -> None:
+    """Run reality_check.probes.run() in a background thread (issues #3/#7): live SEO/security/
+    accessibility/agent-ready findings against the buyer-supplied URL, folded into job state
+    (`probes`) and read by verdict() to back objective claims with probe evidence."""
+    def _work() -> None:
+        try:
+            res = probes.run(url, budget_s=10.0)
+        except Exception as exc:  # pragma: no cover - probes.run already fails closed
+            res = {"url": url, "ok": False, "fetched": False, "findings": [], "namespaces": [], "error": str(exc)[:200]}
+        # patch_job_state does a read-modify-write of ONLY the "probes" key, under the store's
+        # lock, reading fresh at write time -- so it is safe no matter whether this thread
+        # finishes before or after start()'s own wholesale store.put_job(claims/voi/panel...).
+        store.patch_job_state(job_id, "probes", res)
+        store.event(job_id, "probes.done", {"fetched": res.get("fetched"), "status": res.get("status"),
+                                            "findings": [f["id"] for f in res.get("findings", [])],
+                                            "error": res.get("error")})
+    threading.Thread(target=_work, daemon=True).start()
+
+
+def _probe_check_ids(claim_text: str) -> tuple[str, ...] | None:
+    """Look up the lenses.py Claim matching this claim's text; return its `check` id prefixes
+    when it is an objective/both claim, else None. Imported lazily so judge.py stays SKU-agnostic
+    of the rubric (issue #2 wires the rest of it)."""
+    from reality_check import lenses
+    for lens in lenses.LENSES:
+        for c in lens.claims:
+            if c.text == claim_text and c.mode in ("objective", "both") and c.check:
+                return c.check
+    return None
+
+
 def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None) -> Verdict:
     job_id = job_id or uuid.uuid4().hex[:12]
     store.put_job(job_id, req.buyer_id, "evaluating", req.model_dump(), {})
@@ -152,6 +184,11 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
         store.put_job(job_id, req.buyer_id, "settled", req.model_dump(), state)
         store.event(job_id, "job.settled", {"via": "internal"})
         _notify(job_id)
+    if req.url:
+        # launched after every wholesale store.put_job() this function makes: patch_job_state
+        # merges into whatever is in the DB at write time, so this ordering isn't load-bearing
+        # for correctness, but it keeps the common case (thread finishes late) the only case.
+        _launch_probes(job_id, req.url)
     return verdict(job_id)
 
 
@@ -276,6 +313,22 @@ def verdict(job_id: str) -> Verdict:
         j = (st.get("replay") or {}).get("journeys", {}).get(str(c["idx"]))
         if j:
             cv.objective = {"source": "replay_qa", "journey_id": j["journey_id"], "result": j.get("result"), "bugs": j.get("bugs", [])}
+        probe_run = st.get("probes")
+        if cv.objective is None and probe_run and probe_run.get("fetched"):
+            prefixes = _probe_check_ids(cv.claim)
+            produced = set(probe_run.get("namespaces") or [])
+            # only override a claim when EVERY prefix it checks fell under a namespace this run
+            # actually produced -- a claim gated on autonomy/* or security/payments-handrolled
+            # (rubric claims probes.py does not implement) must be left untouched, not auto-passed.
+            unknown = [u.split(":", 1)[0] for u in (probe_run.get("unknown") or [])]
+            if prefixes and all(p.split("/", 1)[0] in produced for p in prefixes) \
+                    and not any(u.startswith(p) for u in unknown for p in prefixes):
+                # a check that never got a response is not evidence either way: leave the claim alone
+                findings = probe_run.get("findings", [])
+                failing = [f for f in findings if any(f["id"].startswith(p) for p in prefixes)]
+                cv.verdict = "no" if failing else "yes"
+                cv.p_internal = 0.05 if failing else 0.95
+                cv.objective = {"source": "probes", "failing": [f["id"] for f in failing], "evidence": [f["evidence"] for f in failing]}
     n_humans = len(by_claim.get(0, []))
     if not cvs:
         return Verdict(job_id=job_id, status=job["status"], verdict="undecided", p=0.5, confidence=0.0, agreement=0.0,
