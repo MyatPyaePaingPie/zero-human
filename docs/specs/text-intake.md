@@ -33,9 +33,12 @@ The website stays only as the place the PDF and agent.md are hosted (and the pay
    `STOP` opts out (exists).
 
 ## Gather, DONE, pay, process (Aria, 15:40; supersedes the section above)
-1. First link or text from a phone opens the job. Ack: `Got it, saved. Text me anything else: more links,
-   your one-line pitch, your price. When you have sent everything, text DONE and I will send your
-   payment link.` No pay link yet.
+1. First link or text from a phone opens the job. Ack names what they can send: `Got it, saved. Send me
+   any of these, one per text or all at once: your GitHub repo link, your Google Slides link (make it
+   public), your landing page or demo link, your one-line pitch, your price. When you have sent
+   everything, text DONE and I will send your payment link ($8).` No pay link yet. Unrecognized link:
+   `Saved that link as your landing page; if it is a deck or repo, tell me.` Private Slides: `I cannot
+   open that deck; in Slides use Share -> Anyone with the link, then send it again.`
 2. Every further message before DONE attaches (links parsed, plain text kept as pitch context) and gets a
    one-liner: `Added your deck. Text DONE when ready.`
 3. `DONE` (also done / ready / go / start): `Reading N sources: repo, deck, page. Here is your payment link
