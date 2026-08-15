@@ -131,6 +131,23 @@ def gate_panel_launch(job_id: str, arm: str, price_usd: float, paid_usd: float) 
         return False
 
 
+def bootstrap(example: Path = Path("state/envelope.example.json")) -> str:
+    """On boot (Render has no shell): if RC_ENVELOPE_SECRET is set and no envelope exists,
+    sign the example into ENVELOPE_PATH. Returns a one-line status for the event log."""
+    secret = os.environ.get("RC_ENVELOPE_SECRET", "")
+    if ENVELOPE_PATH.exists():
+        return "envelope present"
+    if not secret:
+        return "no envelope and no RC_ENVELOPE_SECRET; paid arms stay denied"
+    if not example.exists():
+        return f"no {example}; paid arms stay denied"
+    body = {k: v for k, v in json.loads(example.read_text()).items() if k in SIGNED_FIELDS}
+    body["signature"] = sign(body, secret)
+    ENVELOPE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ENVELOPE_PATH.write_text(json.dumps(body, indent=2))
+    return f"envelope signed into {ENVELOPE_PATH}"
+
+
 def _cli(argv: list[str]) -> int:
     if len(argv) >= 2 and argv[1] == "sign":
         secret = os.environ.get("RC_ENVELOPE_SECRET", "")

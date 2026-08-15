@@ -24,11 +24,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from reality_check import before_after, intake, judge, skus, store, stripe_poll, stripe_webhook, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
-from reality_check.policy import learning, protocol
+from reality_check.policy import envelope, learning, protocol
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    store.event(None, "envelope.bootstrap", {"status": envelope.bootstrap()})
     stripe_poll.start_background()
     yield
 
@@ -177,6 +178,28 @@ def jobs() -> list[dict]:
     return [judge.verdict(j["job_id"]).model_dump() for j in store.list_jobs()]
 
 
+def _learning_lines() -> str:
+    rep = learning.report()
+    if rep.get("error"):
+        return html.escape(f"learning unavailable: {rep['error']}")
+    sc = rep["swarm_check"]
+    f3 = lambda x: "n/a" if x is None else f"{x:.3f}"  # noqa: E731
+    if not sc.get("n_jobs"):
+        l1 = "Swarm check: unmeasured until 3 jobs settle against humans."
+    else:
+        l1 = (f"Swarm check ({sc['n_jobs']} settled jobs): {sc['verdict']}. Ensemble brier {f3(sc.get('ensemble_brier'))} "
+              f"vs lone agent median {f3(sc.get('median_single_brier'))} / best {f3(sc.get('best_single_brier'))}; "
+              f"ensemble cost ${sc.get('ensemble_cost_usd') or 0:.3f} vs one agent ${sc.get('single_cost_usd') or 0:.3f}.")
+    live = [a for a in rep["arms"].values() if a.get("n_settled")]
+    if not live:
+        l2 = "Where humans beat the models: no settled human panels yet; VOI is running on priors."
+    else:
+        l2 = "Where humans beat the models: " + " · ".join(
+            f"{a['arm']}: gain {(a.get('measured_gain') or 0):.0%} ({'measured' if a.get('live') else 'prior until n>=10'}, "
+            f"n={a['n_settled']}, overturned {a.get('overturned_jobs', 0)})" for a in live)
+    return html.escape(l1) + "<br>" + html.escape(l2)
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> str:
     t = store.ledger_totals()
@@ -190,5 +213,6 @@ def dashboard() -> str:
 <style>body{{font:14px/1.4 -apple-system,system-ui,sans-serif;margin:2rem;color:#111}}table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #ddd;padding:.4rem;text-align:left;vertical-align:top}}.k{{font-size:2rem;margin-right:2rem}}</style>
 <h1>Reality Check</h1>
 <p><span class=k>revenue ${t['revenue_usd']:.2f}</span><span class=k>evidence cost ${t['cost_usd']:.2f}</span><span class=k>margin ${t['margin_usd']:.2f}</span></p>
+<p>{_learning_lines()}</p>
 <table><tr><th>job</th><th>status</th><th>verdict</th><th>models/humans</th><th>VOI</th><th>rev</th><th>cost</th><th>summary</th></tr>{rows}</table>
 <h2>Decision log</h2><ul>{ev}</ul>"""

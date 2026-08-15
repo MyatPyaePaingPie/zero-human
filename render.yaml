@@ -1,0 +1,46 @@
+# Render blueprint: New + Blueprint, pick this repo. Free plan is fine for the day.
+# Secrets are entered in the Render dashboard (sync: false), never here.
+services:
+  - type: web
+    name: reality-check
+    runtime: python
+    plan: free
+    buildCommand: pip install -e .
+    startCommand: uvicorn reality_check.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /ledger
+    disk:
+      name: rc-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: RC_DB
+        value: /var/data/rc.db
+      - key: RC_ENVELOPE
+        value: /var/data/envelope.json
+      - key: RC_PUBLIC_BASE
+        fromService:
+          type: web
+          name: reality-check
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: RC_DEADLINE_ISO
+        value: "2026-08-15T18:30:00-07:00"
+      - key: RC_HUMAN_TIMEOUT_S
+        value: "1800"
+      - key: TERAC_CPI_USD
+        value: "1.0"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ZEROHUMAN_STRIPE_RESTRICTED_KEY
+        sync: false
+      - key: RC_PAYLINK_DEFAULT
+        sync: false
+      - key: TERAC_API_KEY
+        sync: false
+      - key: TERAC_PROJECT_ID
+        sync: false
+      - key: RC_ENVELOPE_SECRET
+        sync: false

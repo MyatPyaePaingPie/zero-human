@@ -22,6 +22,7 @@ from reality_check.policy import envelope, learning
 
 HUMAN_TARGET_N = 5
 HUMAN_MIN_N_TO_SETTLE = 3
+HUMAN_TIMEOUT_S = float(os.environ.get("RC_HUMAN_TIMEOUT_S", "1800"))  # after this, settle with what exists
 
 
 def seconds_to_deadline() -> float | None:
@@ -93,19 +94,31 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
     if req.force_humans and not decision.buy:
         decision = decision.model_copy(update={"buy": True, "arm": decision.arm or "linq_panel",
                                                "reason": "humans sold to buyer (force_humans); VOI gate bypassed: " + decision.reason})
+    use_free_panel = False
     if decision.buy and decision.arm:
         # company spend authority is code (envelope), never the buyer's flag or free text
         price = next((a.price_usd for a in arms if a.name == decision.arm), 0.0)
         if not envelope.gate_panel_launch(job_id, decision.arm, price, paid_usd):
-            decision = decision.model_copy(update={"buy": False, "reason": "envelope denied (see envelope.checked event): " + decision.reason})
+            if req.force_humans:
+                # humans were sold: fall to the free in-room page rather than no humans
+                use_free_panel = True
+                decision = decision.model_copy(update={"reason": "envelope denied paid arm; humans via free local page: " + decision.reason})
+            else:
+                decision = decision.model_copy(update={"buy": False, "reason": "envelope denied (see envelope.checked event): " + decision.reason})
     store.event(job_id, "voi.decided", decision.model_dump())
 
     state = {"claims": claims, "voi": decision.model_dump(), "panel": None,
              "human_question": req.human_question or skus.default_human_question(req.sku)}
     if decision.buy and decision.arm:
-        panel = panels.for_arm(decision.arm)
-        handle = panel.launch(job_id, state["human_question"] or req.claims[0], req.input, HUMAN_TARGET_N)
+        panel = panels.REGISTRY["local"] if use_free_panel else panels.for_arm(decision.arm)
+        approve = lambda quoted, arm=decision.arm: envelope.gate_panel_launch(job_id, arm, quoted, paid_usd)  # noqa: E731
+        handle = panel.launch(job_id, state["human_question"] or req.claims[0], req.input, HUMAN_TARGET_N, approve=approve)
+        if handle.source != "local" and handle.external_id is None:
+            # paid backend recruited nobody (dry, HTTP error, gate refused quote): do not stall the buyer
+            store.event(job_id, "panel.fallback", {"from": handle.source, "to": "local", "rate_url": handle.rate_url})
+            handle = panels.REGISTRY["local"].launch(job_id, state["human_question"] or req.claims[0], req.input, HUMAN_TARGET_N)
         state["panel"] = handle.__dict__
+        state["launched_at"] = store.now()
         if handle.price_usd:
             store.ledger_add(job_id, f"cost.{handle.source}", handle.price_usd, f"panel n={handle.n_requested}")
         store.event(job_id, "panel.launched", state["panel"])
@@ -177,7 +190,40 @@ def _claim_verdict(c: dict, answers: list[dict]) -> ClaimVerdict:
                         minority_view=(against[0]["reasoning"] if against else "")[:400])
 
 
+def _timed_out(job: dict) -> bool:
+    la = job["state"].get("launched_at")
+    if job["status"] != "awaiting_humans" or not la:
+        return False
+    try:
+        t0 = datetime.fromisoformat(la)
+    except ValueError:
+        return False
+    if t0.tzinfo is None:
+        t0 = t0.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - t0).total_seconds() > HUMAN_TIMEOUT_S
+
+
+def settle_on_timeout(job_id: str) -> bool:
+    """awaiting_humans past RC_HUMAN_TIMEOUT_S: settle with the humans that exist (>=1) or
+    model-only, and say so. Returns True if it settled."""
+    job = store.get_job(job_id)
+    if not job or not _timed_out(job):
+        return False
+    by_claim = _answers_by_claim(job_id)
+    if by_claim.get(0):
+        _settle_against_humans(job, by_claim)
+        via = f"timeout with {len(by_claim[0])} humans"
+    else:
+        job["state"]["timed_out"] = True
+        store.put_job(job_id, job["buyer_id"], "settled", job["request"], job["state"])
+        via = "timeout, model-only"
+    store.event(job_id, "job.settled", {"via": via, "timeout_s": HUMAN_TIMEOUT_S})
+    return True
+
+
 def verdict(job_id: str) -> Verdict:
+    if settle_on_timeout(job_id):
+        pass
     job = store.get_job(job_id)
     if not job:
         raise KeyError(job_id)
@@ -200,6 +246,8 @@ def verdict(job_id: str) -> Verdict:
     else:
         summary = f"{passed}/{len(cvs)} claims hold per model consensus. " + (
             "Human panel pending." if job["status"] == "awaiting_humans" else "Internal consensus sufficient.")
+    if st.get("timed_out"):
+        summary = "Human panel did not answer in time; model-only verdict. " + summary
     if all_skipped:
         summary = "Model evaluators unavailable (provider errors); humans are the only evidence. " + summary
     minority = next((v.minority_view for v in cvs if v.minority_view), "")

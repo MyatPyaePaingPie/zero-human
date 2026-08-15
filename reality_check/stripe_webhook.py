@@ -49,16 +49,18 @@ def verify_signature(payload: bytes, sig_header: str, secret: str, now: float | 
     return any(hmac.compare_digest(expected, v) for v in v1s)
 
 
-def _claimed(session_id: str) -> bool:
-    """Idempotency: True if this session id was already processed."""
+def _is_claimed(session_id: str) -> bool:
     with store.conn() as c:
-        row = c.execute("SELECT 1 FROM events WHERE kind='stripe.session' AND payload=? LIMIT 1",
-                        (json.dumps({"session": session_id}),)).fetchone()
-        if row:
-            return True
+        return c.execute("SELECT 1 FROM events WHERE kind='stripe.session' AND payload=? LIMIT 1",
+                         (json.dumps({"session": session_id}),)).fetchone() is not None
+
+
+def _claim(session_id: str) -> None:
+    """Idempotency mark, written only AFTER the ledger/job side effects succeeded, so a failure
+    (evaluator outage, DB lock) leaves the session unclaimed and the poller retries it."""
+    with store.conn() as c:
         c.execute("INSERT INTO events(job_id,kind,payload,created_at) VALUES(NULL,'stripe.session',?,?)",
                   (json.dumps({"session": session_id}), store.now()))
-    return False
 
 
 def complete_session(session: dict) -> dict:
@@ -66,27 +68,34 @@ def complete_session(session: dict) -> dict:
     Shared by the webhook and the read-only poller (stripe_poll.py); the amount always comes
     from Stripe, never from a request body."""
     session_id = session["id"]
-    if (session.get("payment_status") or "paid") != "paid":
+    if (session.get("payment_status") or "unpaid") != "paid":
         return {"unpaid": session_id}
-    if _claimed(session_id):
+    if _is_claimed(session_id):
         return {"duplicate": session_id}
     amount = float(session.get("amount_total") or 0) / 100.0
     job_id = session.get("client_reference_id")
     email = (session.get("customer_details") or {}).get("email")
-    store.event(job_id, "stripe.paid", {"session": session_id, "amount_usd": amount, "email": email})
     job = store.get_job(job_id) if job_id else None
-    if job and job["status"] == "pending_payment":
-        req = JudgeRequest(**job["request"])
-        judge.start(req, paid_usd=amount, job_id=job_id)  # ledger revenue row is written inside start()
-        return {"started": job_id, "amount_usd": amount}
-    if not job:
-        # paid with no matching order (QR walk-up): placeholder job the operator fills in
-        jid = job_id or f"walkup-{session_id[-8:]}"
-        store.put_job(jid, email or "walkup", "pending_payment",
-                      {"sku": "reality_check", "input": "", "claims": skus.default_claims("reality_check")}, {"walkup": True})
-        store.ledger_add(jid, "revenue", amount, f"stripe {session_id} (walk-up, awaiting input)")
-        return {"walkup": jid, "amount_usd": amount}
-    return {"noop": job_id, "status": job["status"]}
+    try:
+        if job and job["status"] == "pending_payment":
+            req = JudgeRequest(**job["request"])
+            judge.start(req, paid_usd=amount, job_id=job_id)  # ledger revenue row is written inside start()
+            out = {"started": job_id, "amount_usd": amount}
+        elif not job:
+            # paid with no matching order (QR walk-up): placeholder job the operator fills in
+            jid = job_id or f"walkup-{session_id[-8:]}"
+            store.put_job(jid, "walkup", "pending_payment",
+                          {"sku": "reality_check", "input": "", "claims": skus.default_claims("reality_check")}, {"walkup": True, "email": email})
+            store.ledger_add(jid, "revenue", amount, f"stripe {session_id} (walk-up, awaiting input)")
+            out = {"walkup": jid, "amount_usd": amount}
+        else:
+            out = {"noop": job_id, "status": job["status"]}
+    except Exception as exc:
+        store.event(job_id, "stripe.session.failed", {"session": session_id, "error": str(exc)[:300]})
+        raise
+    store.event(job_id, "stripe.paid", {"session": session_id, "amount_usd": amount})
+    _claim(session_id)
+    return out
 
 
 @router.post("/order")

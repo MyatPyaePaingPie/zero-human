@@ -29,14 +29,14 @@ class PanelHandle:
 class Panel(Protocol):
     name: str
 
-    def launch(self, job_id: str, question: str, input_text: str, n: int) -> PanelHandle: ...
+    def launch(self, job_id: str, question: str, input_text: str, n: int, approve=None) -> PanelHandle: ...
 
 
 class LocalPanel:
     """No recruiting: hands back the rating URL. Used for in-room QR / dev."""
     name = "local"
 
-    def launch(self, job_id: str, question: str, input_text: str, n: int) -> PanelHandle:
+    def launch(self, job_id: str, question: str, input_text: str, n: int, approve=None) -> PanelHandle:
         return PanelHandle("local", None, f"{PUBLIC_BASE}/rate/{job_id}?src=local", n, 0.0)
 
 

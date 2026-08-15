@@ -27,7 +27,7 @@ from reality_check import store
 from reality_check.panels import PUBLIC_BASE, PanelHandle
 
 BASE = os.environ.get("TERAC_API_BASE", "https://terac.com/api/external/v2")
-DEFAULT_CPI_USD = float(os.environ.get("TERAC_DEFAULT_CPI_USD", "5.0"))   # planning number until a quote exists
+from reality_check.core.voi import TERAC_CPI_USD as DEFAULT_CPI_USD  # one price constant for gate, ledger, planning
 TIMEOUT = 20.0
 
 
@@ -62,7 +62,9 @@ class TeracPanel:
         return data.get("data", data) if isinstance(data, dict) else data
 
     # -- Panel contract ---------------------------------------------------------------------
-    def launch(self, job_id: str, question: str, input_text: str, n: int) -> PanelHandle:
+    def launch(self, job_id: str, question: str, input_text: str, n: int, approve=None) -> PanelHandle:
+        """approve(price_usd) -> bool is consulted AFTER Terac quotes the opportunity and BEFORE
+        launch, so the real price is what the spend envelope judges."""
         rate_url = f"{PUBLIC_BASE}/rate/{job_id}?src=terac"
         if not os.environ.get("TERAC_API_KEY"):
             store.event(job_id, "terac.dry", {"reason": "no TERAC_API_KEY", "rate_url": rate_url, "n": n})
@@ -89,6 +91,9 @@ class TeracPanel:
             pricing = opp.get("pricing") or {}
             total_cents = pricing.get("total_cost_cents")
             price = (float(total_cents) / 100.0) if total_cents is not None else DEFAULT_CPI_USD * n
+            if approve is not None and not approve(price):
+                store.event(job_id, "terac.declined", {"opportunity_id": opp_id, "price_usd": price, "reason": "spend gate refused quoted price"})
+                return PanelHandle("terac", None, rate_url, n, 0.0)
             self._post(f"/opportunities/{opp_id}/launch", {})
             store.event(job_id, "terac.launched", {"opportunity_id": opp_id, "n": n, "price_usd": price, "pricing": pricing})
             return PanelHandle("terac", opp_id, rate_url, n, round(price, 4))

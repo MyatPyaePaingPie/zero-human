@@ -72,8 +72,11 @@ def scan(body: dict) -> tuple[list[str], list[str]]:
 
 
 def replay_guard(nonce: str | None, content_sha256: str) -> bool:
-    """True if fresh. Nonce (or hash when no nonce) is recorded append-only in events."""
-    key = nonce or content_sha256
+    """True if fresh. Only an explicit X-RC-Nonce is replay-checked (append-only in events);
+    identical bodies without a nonce are legitimate (two buyers, one URL; an agent retry)."""
+    if not nonce:
+        return True
+    key = nonce
     with store.conn() as c:
         seen = c.execute("SELECT 1 FROM events WHERE kind='protocol.nonce' AND payload=? LIMIT 1", (json.dumps({"n": key}),)).fetchone()
         if seen:

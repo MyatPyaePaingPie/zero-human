@@ -108,3 +108,28 @@ def test_stripe_complete_session_idempotent():
     r1 = stripe_webhook.complete_session(sess); r2 = stripe_webhook.complete_session(dict(sess))
     assert r1.get("started") == jid and r2 == {"duplicate": "cs_test_1"}
     assert c.get(f"/order/{jid}").json()["revenue_usd"] == 8.0
+
+
+def test_timeout_settles_model_only(monkeypatch):
+    from reality_check import judge as J
+    r = c.post("/judge", json={"input": "Foo", "claim": "It is clear", "force_humans": True}, headers={"X-RC-Paid": "5"})
+    jid = r.json()["job_id"]
+    assert r.json()["status"] == "awaiting_humans"
+    monkeypatch.setattr(J, "HUMAN_TIMEOUT_S", -1.0)
+    v = c.get(f"/judge/{jid}").json()
+    assert v["status"] == "settled" and "did not answer in time" in v["summary"]
+
+
+def test_stripe_failed_start_is_not_claimed(monkeypatch):
+    from reality_check import stripe_webhook, judge as J
+    o = c.post("/order", json={"input": "x", "claim": "y"}).json(); jid = o["job_id"]
+    sess = {"id": "cs_test_fail", "payment_status": "paid", "amount_total": 800, "client_reference_id": jid}
+    def boom(*a, **k): raise RuntimeError("evaluators down")
+    monkeypatch.setattr(J, "start", boom)
+    import pytest
+    with pytest.raises(RuntimeError):
+        stripe_webhook.complete_session(sess)
+    monkeypatch.undo()
+    assert stripe_webhook.complete_session(sess).get("started") == jid  # retried, not duplicate
+    assert stripe_webhook.complete_session(sess) == {"duplicate": "cs_test_fail"}
+    assert stripe_webhook.complete_session({"id": "cs_x", "amount_total": 100}) == {"unpaid": "cs_x"}

@@ -8,6 +8,7 @@ for name in ZEROHUMAN_STRIPE_RESTRICTED_KEY ZEROHUMAN_STRIPE_PUBLISHABLE_KEY TER
   fi
 done
 export RC_PUBLIC_BASE="${RC_PUBLIC_BASE:-http://localhost:8000}"
+export RC_HUMAN_TIMEOUT_S="${RC_HUMAN_TIMEOUT_S:-1800}"
 export RC_DEADLINE_ISO="${RC_DEADLINE_ISO:-2026-08-15T18:30:00-07:00}"
 export RC_DB="${RC_DB:-demo.db}"
 if [ -n "${RC_ENVELOPE_SECRET:-}" ] && [ ! -f state/envelope.json ]; then
