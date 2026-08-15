@@ -40,16 +40,21 @@ Header: project, stamps, "do not invent facts; every item cites evidence". Then 
 `## Fix before 18:30 (agent-owned)`, `## Needs a human decision`, `## Business gaps`, `## Repo advice`.
 Each finding: `### <id> [pass|partial|fail]`, Evidence, Fix, Done when. Same ids as the PDF.
 
-## 2. The smallest pipeline
+## 1b. Template (build from this)
+Rendered template of both files: `docs/specs/report-template.html` (artifact:
+https://claude.ai/code/artifact/4b64539c-1840-4ff8-b00d-acd363fb2424). Sponsor tracks are the first
+table on page 1: that is where the prize money is, so it is where the report starts.
+
+## 2. The smallest pipeline (simplified 14:45: cut the panel to 2 personas, humans optional)
 
 ```
 Lovable form (repo URL, Slides URL, landing URL, optional phone)   -- one, two, or three
   -> POST /intake/hackathon                                        -- #20 wiring
   -> bundle: README+manifests (GitHub API) | slides text (export/pdf) | page text+probes (already built)
-  -> agentic panel: 5 personas x batched call over the rubric JSON (judging+sponsors+messaging+technical) + the 4 gaps
-       sponsor evidence_hints grep first (zero calls); model only for what text must judge
-  -> human panel: brief (rubric.human_panel.brief) -> Terac general population n=3 (+ room raters via existing /rate)
-       blind vote, then reveal, revision stored; settle at n or timeout 30 min
+  -> sponsor check: grep evidence_hints over README+manifests+page (zero model calls) -> qualifies / claimed-not-evidenced / not used
+  -> ONE batched model call per rubric section (judging, messaging, technical, gaps), 2 personas (judge, customer)
+  -> humans: Terac general population n=3 with the one-page brief, blind vote; report renders immediately with
+       "humans pending" and re-renders when they land (no waiting, no reveal step today)
   -> report.json -> agent.md + PDF (one HTML template, weasyprint or similar)
   -> result page + text link
 ```
@@ -60,8 +65,8 @@ Build list, in order, with owner:
 2. **Rubric evaluation**: parse `docs/hackathon-rubric.md` JSON, batched evaluate per section with the
    5 agentic personas; hints grep before model. (code; #2's evaluate_batch is this)
 3. **Report JSON + agent.md + PDF** per this file and `docs/specs/agent-report.md`. (code)
-4. **Human panel**: brief text + 3 yes/no + free text; Terac launch general population n=3 per job;
-   room /rate page as second source. Blind then reveal. (code, small: panels.py + terac_client exist)
+4. **Humans**: Terac general population n=3 per job with the brief; blind vote only; report updates when
+   they land. (code, small: panels.py + terac_client exist)
 5. **Lovable form + result page** pointing at the new endpoints. (keydriver / Myat)
 6. **Dogfood**: run it on our own repo + deck + page; fix what it says. (advisor + code)
 

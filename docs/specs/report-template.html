@@ -1,0 +1,135 @@
+<title>Reality Check Report Template</title>
+<style>
+:root{--paper:#fbfaf7;--ink:#17181a;--muted:#5d5f66;--rule:#d9d6cf;--card:#f2f0ea;--accent:#1c4fd6;--good:#1f7a3f;--warn:#b7791f;--bad:#b3261e;--code:#eeece6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#15161a;--ink:#ecebe6;--muted:#a3a49f;--rule:#34363c;--card:#1e2025;--accent:#7ea2ff;--good:#5ccb84;--warn:#e2b04a;--bad:#f0756a;--code:#24262c}}
+:root[data-theme="dark"]{--paper:#15161a;--ink:#ecebe6;--muted:#a3a49f;--rule:#34363c;--card:#1e2025;--accent:#7ea2ff;--good:#5ccb84;--warn:#e2b04a;--bad:#f0756a;--code:#24262c}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 "Helvetica Neue",Helvetica,Arial,sans-serif;margin:0;padding:32px 16px}
+h1,h2,h3{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;text-wrap:balance;margin:0}
+.wrap{max-width:860px;margin:0 auto;display:grid;gap:40px}
+.intro{max-width:65ch}.intro p{color:var(--muted)}
+.page{border:1px solid var(--rule);background:var(--paper);padding:36px 40px;display:grid;gap:22px;position:relative}
+.page::before{content:attr(data-page);position:absolute;top:10px;right:14px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:34px;line-height:1.1}h2{font-size:22px}h3{font-size:16px}
+.stamps{display:flex;gap:12px;flex-wrap:wrap}
+.stamp{border:2px solid;padding:8px 14px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:13px}
+.good{color:var(--good);border-color:var(--good)}.warn{color:var(--warn);border-color:var(--warn)}.bad{color:var(--bad);border-color:var(--bad)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);padding:14px 16px;display:grid;gap:6px}
+.card .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--rule);vertical-align:top}th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tw{overflow-x:auto}
+code,.id{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--accent)}
+.pill{display:inline-block;padding:1px 8px;border-radius:2px;font-size:12px;font-weight:700}
+.p-good{background:var(--good);color:#fff}.p-warn{background:var(--warn);color:#fff}.p-bad{background:var(--bad);color:#fff}.p-na{background:var(--rule);color:var(--ink)}
+ol,ul{margin:0;padding-left:20px}li{margin:4px 0}
+.foot{border-top:1px solid var(--rule);padding-top:10px;font-size:12px;color:var(--muted)}
+pre{background:var(--code);padding:18px 20px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);margin:0}
+.note{font-size:13px;color:var(--muted)}
+</style>
+<div class="wrap">
+<div class="intro">
+<div class="eyebrow">Reality Check, Zero Human Company Hackathon, template</div>
+<h1>Reality Check Report Template</h1>
+<p>What a team receives: a three-page PDF and one <code>agent.md</code>, both rendered from the same <code>report.json</code>. Placeholder values are in angle brackets. Sponsor usage is the first thing on the page because it is where the prize money is.</p>
+</div>
+
+<section class="page" data-page="PDF page 1 of 3">
+<div class="eyebrow">Reality Check, 2026-08-15, job <span class="id">&lt;job_id&gt;</span></div>
+<h1>&lt;Project name&gt;</h1>
+<p>"&lt;one-line pitch, the team's own words&gt;"</p>
+<div class="stamps"><span class="stamp warn">Hackathon: fixable by 18:30</span><span class="stamp bad">Business: not yet</span></div>
+<div class="grid2">
+<div class="card"><div class="k">Do these three before you submit</div><ol><li>&lt;highest-leverage fix, names the slide/screen/file&gt;</li><li>&lt;second&gt;</li><li>&lt;third&gt;</li></ol></div>
+<div class="card"><div class="k">What we read</div><div>README + 2 manifests · 12 slides · landing page (14 checks)<br>Judged by 5 agent personas · 3 humans (customer, founder, engineer) <span class="pill p-na">humans pending</span></div></div>
+</div>
+<h2>Sponsor tracks</h2>
+<div class="tw"><table><tr><th>Track</th><th>Prize</th><th>Status</th><th>Evidence / what is missing</th></tr>
+<tr><td>Terac (required)</td><td>rule</td><td><span class="pill p-good">qualifies</span></td><td>terac_create_opportunity in <code>panels.py</code>; before/after number missing from deck</td></tr>
+<tr><td>Stripe (required)</td><td>rule</td><td><span class="pill p-good">qualifies</span></td><td>buy.stripe.com link on page; revenue number not stated</td></tr>
+<tr><td>Linq</td><td>$1,500 / $1,000</td><td><span class="pill p-warn">claimed, not evidenced</span></td><td>deck says "texts customers"; no linqapp in repo or page</td></tr>
+<tr><td>Replay</td><td>$1,000 / $500</td><td><span class="pill p-bad">not used</span></td><td>cheapest add: run qa.replay.io on your URL, paste fixes, show clean report</td></tr>
+<tr><td>Render</td><td>$500 credits</td><td><span class="pill p-warn">hosted, no Workflows</span></td><td>onrender.com live; track requires Render Workflows</td></tr>
+<tr><td>Band · Superserve · Pioneer</td><td>$500 · $1,000 · $500</td><td><span class="pill p-na">not used</span></td><td>skip unless one is already in the stack</td></tr>
+</table></div>
+<div class="foot">Stamp rules: hackathon = contender when both required rules pass and no weight-3 judging item fails; fixable when fails are agent-owned; not yet otherwise. Business = ready_to_charge / one_gap_away / not_yet by the four gaps. &lt;N&gt; hackathon projects reviewed today; this one ranks &lt;k&gt;.</div>
+</section>
+
+<section class="page" data-page="PDF page 2 of 3">
+<h2>How to win this hackathon</h2>
+<div class="tw"><table><tr><th>Judging item</th><th>Weight</th><th>Result</th><th>Why</th><th>Fix</th></tr>
+<tr><td><span class="id">judge/terac-human-loop</span></td><td>3</td><td><span class="pill p-warn">partial</span></td><td>humans recruited; no before/after number</td><td>slide 6: "3 raters changed the headline; clarity 40% to 100%"</td></tr>
+<tr><td><span class="id">judge/revenue</span></td><td>3</td><td><span class="pill p-warn">partial</span></td><td>payment link exists; revenue not shown</td><td>slide 1 footer: "$&lt;n&gt; earned today"</td></tr>
+<tr><td><span class="id">judge/autonomy</span></td><td>3</td><td><span class="pill p-good">pass</span></td><td>agents build, sell, decide; human step named</td><td>none</td></tr>
+<tr><td><span class="id">judge/viability</span></td><td>2</td><td><span class="pill p-bad">fail</span></td><td>no payer named, no why-now</td><td>slide 3: who pays, why again, why now agents are cheap</td></tr>
+<tr><td><span class="id">judge/impressiveness</span></td><td>2</td><td><span class="pill p-good">pass</span></td><td>live demo end to end</td><td>none</td></tr>
+<tr><td><span class="id">judge/tracks</span></td><td>1</td><td><span class="pill p-warn">partial</span></td><td>tracks not named</td><td>last slide: list tracks + one line each</td></tr>
+</table></div>
+<h3>Messaging: three rewrites</h3>
+<ul>
+<li><span class="id">msg/first-screen</span> Slide 1 / hero: say what it is, for whom, and the price in one line. Now: "&lt;current headline&gt;". Try: "&lt;rewrite&gt;".</li>
+<li><span class="id">msg/proof</span> Add the two numbers judges will ask for: revenue today, humans who responded and what changed.</li>
+<li><span class="id">msg/thesis</span> Say what people still do and call it a design choice: "&lt;line&gt;".</li>
+</ul>
+</section>
+
+<section class="page" data-page="PDF page 3 of 3">
+<h2>Is it a business</h2>
+<div class="grid2">
+<div class="card"><div class="k">payer <span class="pill p-bad">red</span></div><div>Agents: no named payer, price implied. Humans: 1 of 3 would pay; "I thought it was for developers" (customer). Fix: name the buyer on the first screen.</div></div>
+<div class="card"><div class="k">take_money <span class="pill p-warn">amber</span></div><div>Payment link works; page has no privacy/terms; 4 findable checks fail (<span class="id">audit/description-missing</span>...). Fix list in agent.md.</div></div>
+<div class="card"><div class="k">stranger_proof <span class="pill p-warn">amber</span></div><div>3 humans, blind: 2 of 3 could say what it does; after seeing the panel, 1 changed their mind. Quotes in evidence.</div></div>
+<div class="card"><div class="k">loop <span class="pill p-good">green</span></div><div>Re-run: paste the same links again after fixing; the next report shows fixed / regressed by id.</div></div>
+</div>
+<h2>From vibe-coded to an MVP you can hand users</h2>
+<p class="note">Shown only when a repo was supplied. Plain advice, agent-fixable first; the same items are in agent.md.</p>
+<ul>
+<li><span class="id">tech/runnable</span> README has no run steps; no .env.example. Add both.</li>
+<li><span class="id">tech/vibe-to-mvp</span> State lives in memory; a redeploy loses orders. Add a database or a disk-backed store.</li>
+<li><span class="id">tech/marketable</span> No public URL without login. Put the landing page in front of the login.</li>
+</ul>
+<div class="foot">Evidence: sources read, personas, human responses and timing, probe observations. Re-run: submit the same links at &lt;base&gt;/. Reality Check by zero-human, job &lt;job_id&gt;.</div>
+</section>
+
+<section>
+<h2>agent.md (same data, for the team's coding agent)</h2>
+<pre># Reality Check: &lt;Project name&gt;  (job &lt;job_id&gt;)
+Hackathon: FIXABLE BY 18:30   Business: NOT YET
+Rule: do not invent facts. Every item cites evidence. Fix agent-owned items, then re-run by submitting the same links.
+
+## Fix before 18:30 (agent-owned)
+### sponsor/replay [not used]
+Evidence: no replay / qa.replay.io in repo or page.
+Fix: run Replay QA on &lt;live_url&gt;, paste bug reports here, fix, re-run until clean; add "Replay QA: clean report" to the last slide.
+Done when: sponsor/replay claims 1-2 pass.
+
+### audit/description-missing [fail]
+Evidence: GET &lt;live_url&gt; has no &lt;meta name="description"&gt;.
+Fix: add a 50-160 char description to every page head.
+Done when: audit/description-missing is absent on re-run.
+
+### tech/runnable [fail]
+Evidence: README has no install/run section; no .env.example.
+Fix: add "Run" section (3 commands) and .env.example listing GROQ_API_KEY, STRIPE_...
+Done when: tech/runnable claims 1-2 pass.
+
+## Needs a human decision
+### judge/viability [fail]
+Evidence: deck never names who pays or why again.
+Fix: decide the buyer and the recurring reason; put it on slide 3.
+Done when: judge/viability claim 1 reaches p &gt;= 0.7.
+
+### msg/first-screen [partial]
+Evidence: headline "&lt;current&gt;" names neither buyer nor price.
+Fix: rewrite to "&lt;what&gt; for &lt;whom&gt;, $&lt;price&gt;".
+Done when: msg/first-screen claims pass.
+
+## Business gaps
+payer: red · take_money: amber · stranger_proof: amber · loop: green
+(see items above; humans: 1 of 3 would pay; quote: "I thought it was for developers")
+
+## Sponsor tracks
+qualifies: terac, stripe · claimed not evidenced: linq · cheapest to add: replay · hosted without Workflows: render
+</pre>
+</section>
+</div>
