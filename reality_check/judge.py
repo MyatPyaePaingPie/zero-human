@@ -175,6 +175,20 @@ def _resolve_sources(req: JudgeRequest) -> dict | None:
             "sources": [{k: v for k, v in s.items() if k != "text"} | {"chars": len(s.get("text") or "")} for s in norm.get("sources", [])]}
 
 
+def _launch_hackathon(job_id: str, text: str, has_repo: bool) -> None:
+    """Hackathon rubric evaluation (docs/hackathon-rubric.md) in a background thread; result lands on
+    state.hackathon for the report. Fails closed inside hackathon.evaluate."""
+    def _work() -> None:
+        try:
+            from reality_check import hackathon
+            res = hackathon.evaluate(text, has_repo=has_repo)
+        except Exception as exc:  # pragma: no cover
+            res = {"error": str(exc)[:200], "stamp": "not_yet", "warnings": ["hackathon evaluation failed"]}
+        store.patch_job_state(job_id, "hackathon", res)
+        store.event(job_id, "hackathon.done", {"stamp": res.get("stamp"), "model_calls": res.get("model_calls"), "warnings": res.get("warnings", [])})
+    threading.Thread(target=_work, daemon=True).start()
+
+
 def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None) -> Verdict:
     job_id = job_id or uuid.uuid4().hex[:12]
     src = _resolve_sources(req)
@@ -255,6 +269,8 @@ def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None
         # merges into whatever is in the DB at write time, so this ordering isn't load-bearing
         # for correctness, but it keeps the common case (thread finishes late) the only case.
         _launch_probes(job_id, req.url)
+    if req.sku == "full_reality_check" or src:
+        _launch_hackathon(job_id, req.input, has_repo=bool(req.repo))
     return verdict(job_id)
 
 

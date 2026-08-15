@@ -265,3 +265,26 @@ def test_messaging_rewrite_and_where(monkeypatch):
 
 def test_personas_registered():
     assert "judge" in evaluators.PERSONAS and "customer" in evaluators.PERSONAS
+
+
+def test_judge_launches_hackathon_eval_for_full_check(monkeypatch):
+    """judge.start runs the rubric in a thread and patches state.hackathon."""
+    import threading
+    from fastapi.testclient import TestClient
+    from reality_check import judge as judge_module, store
+    from reality_check.api import app
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    done = threading.Event()
+    real = judge_module._launch_hackathon
+    def sync_launch(job_id, text, has_repo):
+        from reality_check import hackathon
+        store.patch_job_state(job_id, "hackathon", hackathon.evaluate(text, has_repo=has_repo))
+        done.set()
+    monkeypatch.setattr(judge_module, "_launch_hackathon", sync_launch)
+    c = TestClient(app)
+    r = c.post("/judge", json={"input": "Acme sells rockets to hobbyists via Stripe; agents run support.", "sku": "full_reality_check",
+                               "evidence_standard": "voi_routed", "max_budget_usd": 0})
+    assert r.status_code == 200, r.text
+    assert done.is_set()
+    st = store.get_job(r.json()["job_id"])["state"]["hackathon"]
+    assert st["stamp"] in ("contender", "fixable_by_1830", "not_yet") and len(st["judging"]) == 6

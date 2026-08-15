@@ -26,7 +26,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from reality_check import before_after, intake, judge, linq_client, skus, store, stripe_poll, stripe_webhook, sweep, terac_client
+from reality_check import before_after, intake, judge, linq_client, report, skus, store, stripe_poll, stripe_webhook, sweep, terac_client
 from reality_check.core.models import JudgeRequest, Verdict
 from reality_check.policy import envelope, learning, protocol
 
@@ -238,6 +238,41 @@ def sweep_page() -> str:
 <h1>Today's launches, reality-checked</h1>
 <p>Clarity checks by model consensus only, no humans bought: can a stranger tell what it does, who it is for, and what problem it solves? Makers: the human-backed check is $8 at <a href="/">Reality Check</a>.</p>
 {''.join(items) or '<p>No sweep yet.</p>'}"""
+
+
+def _report(job_id: str) -> dict:
+    try:
+        return report.build(job_id)
+    except KeyError:
+        raise HTTPException(404, "no such job")
+
+
+@app.get("/report/{job_id}.json")
+def report_json(job_id: str) -> dict:
+    """report.json: the one data model both agent.md and the PDF render from (docs/specs/agent-report.md)."""
+    return _report(job_id)
+
+
+@app.get("/report/{job_id}/agent.md")
+def report_agent_md(job_id: str) -> Response:
+    """The agent-facing fix doc: drop it in the repo, the coding agent fixes every agent-owned item."""
+    return Response(report.to_agent_md(_report(job_id)), media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/report/{job_id}.pdf")
+def report_pdf(job_id: str) -> Response:
+    rep = _report(job_id)
+    pdf = report.to_pdf(rep)
+    if pdf is None:
+        # honest fallback: the same HTML with print CSS; the browser's Save as PDF gives the file
+        return HTMLResponse(report.to_html(rep))
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="reality-check-{job_id}.pdf"'})
+
+
+@app.get("/report/{job_id}", response_class=HTMLResponse)
+def report_page(job_id: str) -> str:
+    return report.to_html(_report(job_id))
 
 
 @app.get("/verdict/{job_id}", response_class=HTMLResponse)
