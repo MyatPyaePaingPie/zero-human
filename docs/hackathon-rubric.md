@@ -375,51 +375,72 @@ is context for humans. Ids are stable and become finding ids in the report.
     }
   ],
   "human_panel": {
-    "note": "What the humans receive (Aria, 14:20): an agentic panel runs first, then a small human panel from different domains judges on top of it. Humans get a one-page brief, never the raw repo.",
-    "brief": [
-      "one-line pitch as the team wrote it",
-      "the first screen of the deck or landing page (image or text)",
-      "the agentic panel's one-line verdict per gap (shown only after the blind vote, per #5)",
-      "3 yes/no questions + one free-text: 'in one line, what does this company do and who pays?'"
+    "spec": "docs/specs/human-brief.md",
+    "n": 3,
+    "audience": "general population, unrestricted, screener: bought online in last 30 days",
+    "blind": true,
+    "stimulus": [
+      "headline + first screen (hero screenshot | first slide | README first line)",
+      "one-line pitch in the team's words",
+      "price if stated, else 'No price is shown.'"
     ],
-    "domains": [
+    "questions": [
       {
-        "id": "human/customer",
-        "who": "a plausible buyer from the general population",
-        "asks": "would you pay, what would stop you"
+        "id": "q1_what",
+        "text": "In one line: what does this company do, and who is it for?",
+        "type": "text"
       },
       {
-        "id": "human/founder",
-        "who": "someone who has shipped a product",
-        "asks": "is this a business or a demo, what is missing to charge"
+        "id": "q2_pay",
+        "text": "Would you, or someone you know, pay for this?",
+        "type": "yesno",
+        "follow": "Who, and why or why not?"
       },
       {
-        "id": "human/engineer",
-        "who": "an engineer",
-        "asks": "does the autonomy claim hold, where is the human really"
+        "id": "q3_price",
+        "text": "Is the price clear?",
+        "type": "choice",
+        "options": [
+          "yes",
+          "no",
+          "no price shown"
+        ],
+        "follow": "fair / too high / too low"
+      },
+      {
+        "id": "q4_trust",
+        "text": "Would you trust it enough to give it your card today?",
+        "type": "yesno",
+        "follow": "What would make you trust it more?"
+      },
+      {
+        "id": "q5_ai_effect",
+        "text": "This company is run mostly by AI, with few or no people involved. Knowing that, are you more, less, or equally willing to buy?",
+        "type": "choice",
+        "options": [
+          "more",
+          "less",
+          "same"
+        ],
+        "follow": "Why?"
+      },
+      {
+        "id": "q6_change",
+        "text": "If you could change one thing on this page, what would it be?",
+        "type": "text",
+        "optional": true
       }
     ],
-    "agentic_panel": [
-      {
-        "id": "agent/judge",
-        "persona": "a hackathon judge from this panel (YC founder / Stripe AI lead / DeepMind PM)"
-      },
-      {
-        "id": "agent/sponsor",
-        "persona": "a sponsor rep checking meaningful use of their product"
-      },
-      {
-        "id": "agent/investor",
-        "persona": "a seed investor asking who pays and why now"
-      },
-      {
-        "id": "agent/customer",
-        "persona": "a stranger deciding whether to pay in the next minute"
-      },
-      {
-        "id": "agent/engineer",
-        "persona": "an engineer reviewing the repo for vibe-coded fragility"
-      }
+    "derived": {
+      "q1_match": "one model call: does q1_what match the team's pitch? yes/partial/no"
+    },
+    "report_lines": [
+      "Could say what it does: k of n",
+      "Would pay: k of n",
+      "Would hand over a card: k of n",
+      "Price clear: k of n",
+      "Told it is AI-run: more/less/same counts",
+      "two verbatim quotes (q1, q6)"
     ]
   },
   "terac_first": {
