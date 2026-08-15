@@ -257,6 +257,7 @@ def settle_on_timeout(job_id: str) -> bool:
         store.put_job(job_id, job["buyer_id"], "settled", job["request"], job["state"])
         via = "timeout, model-only"
     store.event(job_id, "job.settled", {"via": via, "timeout_s": HUMAN_TIMEOUT_S})
+    _notify(job_id)
     return True
 
 
