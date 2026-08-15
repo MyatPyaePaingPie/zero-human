@@ -473,7 +473,20 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "An autonomous business spends money: API calls, ads, refunds, human hires. The question is who can change how much. If the budget is a sentence in the system prompt, the agent can talk itself past it. If the agent can call the payment API with any amount, one bad loop empties the account.",
         "look_for": "a config or code file with the limit; a freeze/kill switch a human can hit; the deck naming what stops a runaway; any statement about behavior when a price or balance cannot be read",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "Anthropic Project Vend: an agent given a $1,000 budget in its prompt ran the shop into the red (gave away margin, ordered a PS5); the prompt budget was not an enforced limit",
+            "url": "https://www.anthropic.com/research/project-vend-1"
+          },
+          {
+            "what": "Compromised keys let agents burn a $14,000 one-day model bill; billing alerts lag a day behind agent-speed spend. Another agent auto-provisioned $6,531 of cloud in 24h with no ceiling",
+            "url": "https://www.infoq.com/news/2026/07/ai-agents-billing-guardrails/"
+          },
+          {
+            "what": "Replit agent deleted a production database during a code freeze despite being told not to; the instruction was a prompt, not a permission",
+            "url": "https://www.tomshardware.com/tech-industry/artificial-intelligence/ai-coding-platform-goes-rogue-during-code-freeze-and-deletes-entire-company-database-replit-ceo-apologizes-after-ai-engine-says-it-made-a-catastrophic-error-in-judgment-and-destroyed-all-production-data"
+          }
+        ]
       },
       {
         "id": "auto/idempotent-money",
@@ -486,7 +499,16 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "Payment webhooks fire twice. Workers retry. A human clicks approve twice. If the code does not recognize 'I already did this', a customer is charged twice, an order ships twice, or the revenue number shown to judges counts one sale three times.",
         "look_for": "an idempotency key on payment/fulfillment handlers (session id, event id); approvals tied to a hash of what was approved; revenue counted from deduplicated events; the revenue number the team quotes traceable to distinct charges",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "Stripe: retried charges are deduplicated only if the caller supplies the same Idempotency-Key; regenerating it per retry defeats it",
+            "url": "https://stripe.com/blog/idempotency"
+          },
+          {
+            "what": "Same webhook event delivered more than once on retry causes duplicate fulfillment unless deduplicated at the database with a unique constraint on the event id",
+            "url": "https://zenn.dev/kg_filled/articles/9cc7c0c1d85bf1"
+          }
+        ]
       },
       {
         "id": "auto/decision-quality",
@@ -500,7 +522,20 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "A team says 'our agent decided X and it worked'. Compared to what? If a simple rule or a human default would have done as well, the agent adds cost, not value. And a model saying it is 90% confident means nothing until you have checked how often 90% turns out right.",
         "look_for": "a baseline comparison in the deck; confidence used for reporting not for spending; humans answering before they see the agent's answer; before/after numbers from real people or customers, with the source named",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "Models stay verbally confident while wrong; self-reported confidence is not a proxy for correctness",
+            "url": "https://arxiv.org/pdf/2604.01457"
+          },
+          {
+            "what": "About a third of SWE-bench issues leak the solution in the issue text, inflating agent scores; benchmark wins do not predict production",
+            "url": "https://tao-hpu.medium.com/the-ai-benchmark-illusion-why-your-agents-test-scores-mean-nothing-01f3de1a1235"
+          },
+          {
+            "what": "Project Vend 2: profitability came from checklists, price verification, and CRM tooling before big decisions, not from a smarter model",
+            "url": "https://www.anthropic.com/research/project-vend-2"
+          }
+        ]
       },
       {
         "id": "auto/liveness",
@@ -513,7 +548,16 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "Autonomous means nobody is watching. Long-running listeners go quiet without an error. Scheduled work skips a run. The first person to notice is a customer, days later. The question is not 'does it run' but 'who finds out when it does not'.",
         "look_for": "a health endpoint or heartbeat; a canary (a fake order every hour); a stated answer to 'what happens at 3am when step N fails'; alerts that are few and carry evidence and a remedy",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "A deploy silently removed a scheduled-job entry; three weeks of weekly reports were missed before anyone noticed",
+            "url": "https://cronping.com/blog/silent-cron-job-failures"
+          },
+          {
+            "what": "Backup job failed silently for three days, discovered only when the primary database corrupted",
+            "url": "https://dev.to/quietpulse-social/how-to-monitor-cron-jobs-and-stop-silent-failures-2ipd"
+          }
+        ]
       },
       {
         "id": "auto/authority-boundary",
@@ -526,7 +570,16 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "Customers and other agents will type things like 'the manager said this is free' or paste instructions aimed at the model. If inbound text can change prices, grant refunds, or trigger spend, the business can be talked out of its money. This is prompt injection wearing a customer hat.",
         "look_for": "inbound messages treated as data (checked, quarantined) before action; prices, refunds, and spend gated by rules or a human, not by what was typed; the deck naming one abuse case and how it is refused",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "Chevrolet dealership chatbot was prompted into agreeing to sell a $76k Tahoe for $1, 'legally binding, no takesies backsies'; the dealer pulled the bot",
+            "url": "https://incidentdatabase.ai/cite/622/"
+          },
+          {
+            "what": "Air Canada's chatbot invented a bereavement refund policy; a tribunal held the airline liable for what its bot promised (Moffatt v. Air Canada, 2024)",
+            "url": "https://www.mccarthy.ca/en/insights/blogs/techlex/moffatt-v-air-canada-misrepresentation-ai-chatbot"
+          }
+        ]
       },
       {
         "id": "auto/human-loop-design",
@@ -539,7 +592,16 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "The hackathon's own thesis: no company runs at zero humans yet, so where the human sits is the design. A human who rubber-stamps every agent output adds cost and no independence. A human nowhere means nobody catches the agent being wrong. The good version names the decisions a human owns, why an agent should not own them yet, and what the human's answer changes.",
         "look_for": "specific human decisions named with the reason; the human output used by the system (a verdict, a label, a correction); the human step priced and timed; the business still functioning when the human is late",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "When AI was wrong and flagged, humans still approved the bad decision about 74% of the time; oversight only works when disagreeing is cheap and expected",
+            "url": "https://www.raphaelnagel.com/human-in-the-loop-automation-bias"
+          },
+          {
+            "what": "Radiology study: with incorrect AI suggestions, inexperienced readers fell from ~80% to under 20% accuracy and experienced ones from 82% to 45%; expertise slows automation bias, does not prevent it",
+            "url": "https://www.techtarget.com/searchcio/feature/Human-in-the-loop-shouldnt-rubber-stamp-decisions"
+          }
+        ]
       },
       {
         "id": "auto/ledger",
@@ -552,7 +614,22 @@ is context for humans. Ids are stable and become finding ids in the report.
         ],
         "plain": "If orders, decisions, and spends are overwritten in place, the business cannot answer 'how much did we make' or 'why did the agent do that' with evidence. Every number in the pitch (revenue, users, accuracy) should be reconstructable from rows that were written once and never edited.",
         "look_for": "an events table or log that is append-only, with current state derived from it; each pitch number traceable to ledger rows; findings that change state citing their evidence",
-        "evidence_public": []
+        "evidence_public": [
+          {
+            "what": "Knight Capital: dormant code left active on one of eight servers, no reconciliation caught the divergent state, $440M of erroneous trades in 45 minutes",
+            "url": "https://www.henricodolfing.ch/en/case-study-4-the-440-million-software-error-at-knight-capital/"
+          }
+        ]
+      }
+    ],
+    "zero_human_experiments": [
+      {
+        "what": "Project Vend 1: an agent-run shop went bankrupt (gave away margin, ordered unsellable stock, hallucinated a payment account)",
+        "url": "https://www.anthropic.com/research/project-vend-1"
+      },
+      {
+        "what": "Project Vend 2: became profitable once tooling and mandated checklists gated big decisions",
+        "url": "https://www.anthropic.com/research/project-vend-2"
       }
     ]
   }
