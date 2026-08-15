@@ -24,7 +24,7 @@ _DONT_KNOW = ("don't know", "dont know", "no idea", "not sure", "unsure", "no cl
 _NO_ONE = ("no one", "noone", "nobody", "none", "no-one")
 _PRICE_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s?(?:/|per\s)\s?[a-z]+)?", re.I)
 
-_LABELS = {"page": "their landing page", "deck": "their first slide", "repo": "their README"}
+_LABELS = {"page": "their landing page", "deck": "their first slide", "repo": "from their README"}
 _LINK_LABELS = {"page": "Open the full landing page", "deck": "Open the deck", "repo": "Open the repo"}
 
 
@@ -49,6 +49,7 @@ def ensure_page_source(job_id: str, job: dict) -> None:
         from reality_check import judge, sources as sources_mod
         src = sources_mod.read_page(url)
         if not (src.text or "").strip():
+            store.event(job_id, "rate.page_read_empty", {"url": url, "meta": src.meta})
             return
         d = src.as_dict()
         row = {k: v for k, v in d.items() if k != "text"} | {
@@ -98,7 +99,12 @@ def stimulus(job: dict) -> list[dict]:
         if s:
             out.append({"kind": kind, "label": _LABELS[kind], "text": s["first_screen"],
                         "link": s.get("link") or s.get("ref") or "", "link_label": _LINK_LABELS[kind]})
-    if not out and by_kind.get("repo"):
+    url = (job.get("request") or {}).get("url") or ""
+    if not any(o["kind"] == "page" for o in out) and url.startswith("http"):
+        # page text could not be read (blocked, empty, slow): still show the screenshot + link
+        out.insert(0, {"kind": "page", "label": _LABELS["page"], "text": "", "link": url, "link_label": _LINK_LABELS["page"]})
+    if by_kind.get("repo"):
+        # the README first paragraph rides along whenever a repo was given (last, so page/deck lead)
         s = by_kind["repo"]
         out.append({"kind": "repo", "label": _LABELS["repo"], "text": s["first_screen"],
                     "link": s.get("link") or s.get("ref") or "", "link_label": _LINK_LABELS["repo"]})

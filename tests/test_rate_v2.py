@@ -61,7 +61,7 @@ def test_v2_page_renders_the_brief(monkeypatch):
     page = c.get(f"/rate/{jid}?teracSubmissionId=abc").text
     assert "their landing page" in page
     assert "https://acme.example" in page and "Open the full landing page" in page
-    assert "their README" not in page          # a page exists, so the README is not the stimulus
+    assert "from their README" in page       # README rides along after the page (Aria: show all that exist)
     for name in ("q1_what", "q2_pay", "q2_why", "q2_price_guess", "q3_who", "q4_stopper",
                  "q5_ai_effect", "q5_why", "q6_real", "q6_why"):
         assert f'name="{name}"' in page or f"name={name}" in page, name
