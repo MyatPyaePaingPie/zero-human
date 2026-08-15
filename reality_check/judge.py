@@ -64,7 +64,9 @@ def _judge_claim(idx: int, claim: str, text: str, personas: list[str] | None) ->
     }, ev.cost_usd
 
 
-HUMAN_ARMS = ("linq_panel", "terac_general", "terac_expert")   # cheapest first
+HUMAN_ARMS = ("linq_panel", "terac_general", "terac_expert")   # recruiting arms, cheapest first
+# "local_panel" (free in-room rate page, no recruiting) is not routable by VOI: it is only the
+# explicit deadline fallback below and the envelope-denied fallback in start().
 EXPERT_ARMS = ("terac_expert",)
 
 
@@ -83,8 +85,8 @@ def _apply_standard(standard: str, decision, arms, max_budget_usd: float, max_la
         if a and (max_latency_s is None or a.latency_s <= max_latency_s):
             return decision.model_copy(update={"buy": True, "arm": name,
                                                "reason": f"standard {standard} requires humans; cheapest satisfying arm = {name} ${a.price_usd:.2f}; VOI alone said: " + decision.reason})
-    return decision.model_copy(update={"buy": True, "arm": need[0],
-                                       "reason": f"standard {standard}: no arm can return before the deadline, falling to the free local page; VOI alone said: " + decision.reason})
+    return decision.model_copy(update={"buy": True, "arm": "local_panel",
+                                       "reason": f"standard {standard}: no recruiting arm can return before the deadline; free local page (local_panel); VOI alone said: " + decision.reason})
 
 
 def start(req: JudgeRequest, *, paid_usd: float = 0.0, job_id: str | None = None) -> Verdict:

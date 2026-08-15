@@ -49,5 +49,5 @@ def register(panel: Panel) -> None:
 
 def for_arm(arm: str) -> Panel:
     """Map a VOI arm to a recruiting backend; fall back to local when the backend is not wired."""
-    key = {"linq_panel": "linq", "terac_general": "terac", "terac_expert": "terac"}.get(arm, "local")
+    key = {"local_panel": "local", "linq_panel": "linq", "terac_general": "terac", "terac_expert": "terac"}.get(arm, "local")
     return REGISTRY.get(key, REGISTRY["local"])

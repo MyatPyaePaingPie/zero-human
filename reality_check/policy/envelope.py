@@ -35,7 +35,7 @@ from pathlib import Path
 from reality_check import store
 
 ENVELOPE_PATH = Path(os.environ.get("RC_ENVELOPE", "state/envelope.json"))
-FREE_ARMS = {"ensemble", "local"}
+FREE_ARMS = {"ensemble", "local", "local_panel"}
 SIGNED_FIELDS = ("daily_cap_usd", "per_job_cap_usd", "min_margin_ratio", "allowed_arms", "expires_at", "signed_by")
 
 
