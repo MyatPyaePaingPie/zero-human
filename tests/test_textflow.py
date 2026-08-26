@@ -55,6 +55,23 @@ def test_parse_links_github_with_extra_words():
     assert links["repo"] == "https://github.com/acme/widget/tree/main"
 
 
+def test_parse_links_trims_trailing_sentence_punctuation():
+    links = textflow.parse_links(
+        "repo is https://github.com/acme/widget, and the page is https://widget.example."
+    )
+    assert links["repo"] == "https://github.com/acme/widget"
+    assert links["url"] == "https://widget.example"
+    assert "http" not in links["pitch"]
+
+
+def test_checked_sources_trims_trailing_punctuation(monkeypatch):
+    seen = []
+    monkeypatch.setattr(textflow, "access_checker",
+                        lambda kind, url: seen.append((kind, url)) or {"kind": kind, "url": url, "ok": True})
+    textflow._checked_sources("repo is https://github.com/acme/widget, thanks!")
+    assert seen == [("repo", "https://github.com/acme/widget")]
+
+
 # ---- first inbound: ack, job created ------------------------------------------------------
 
 def test_first_inbound_with_links_creates_job_and_acks(monkeypatch):
