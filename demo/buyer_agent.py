@@ -4,6 +4,11 @@ This is the before/after demo. The agent writes copy, asks Reality Check whether
 tell what the company does, and only when the router says humans are worth buying does money
 move. If humans say no, the agent rewrites using their words and checks again.
 
+Scope: this is the pre-pivot single-claim flow (/judge -> /rate -> /before_after) kept because it is
+what shows the VOI gate refusing and then buying. It is NOT the report pipeline: it never runs the
+lens rubric or fetches /report/{job}/agent.md. For the shipped product, text the number or POST
+/judge with sku=full_reality_check and read /report/{job}.json.
+
 Usage:
   .venv/bin/python demo/buyer_agent.py "PitchPolish, an AI that rewrites YC applications" \
       --base http://localhost:8000 --stakes 100 --budget 8 --paid 8 --wait 900

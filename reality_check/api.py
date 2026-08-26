@@ -1,15 +1,39 @@
-"""FastAPI surface.
+"""FastAPI surface. The route table other agents read: keep this list equal to the decorators below.
 
-POST /judge                 buyer (agent or paid human) submits a judgment request
-POST /intake                verified_autonomous intake (claims + invariants, builder-blind); Replay QA project + per-flow-claim journeys
-POST /intake/{id}/redeploy  team shipped a fix: Replay re-tests, verdict shows open bugs before -> after
-POST /order, GET /order/{id} pay-first flow (stripe_webhook.py): pending job -> Payment Link -> poller/webhook starts it
-GET  /judge/{job_id}        verdict so far
-GET  /rate/{job_id}         human rating page (Terac activity task_url / Linq link / room QR)
-POST /rate/{job_id}         human answer
-POST /before_after/lock/{b} lock the "before" verdict hash; GET /before_after/{b}/{a} compare
-GET  /ledger /events /jobs /learning   receipts, decision log, verdicts, arm gains + evaluator reputation
-GET  /                      dashboard
+Intake and judging
+  POST /judge                  buyer (agent or paid human) submits a judgment request
+  GET  /judge/{job}            verdict so far
+  POST /intake                 verified_autonomous intake (claims + invariants, builder-blind); Replay QA project + per-flow-claim journeys
+  POST /intake/{job}/redeploy  team shipped a fix: Replay re-tests, verdict shows open bugs before -> after
+  POST /order, GET /order/{job} pay-first flow (stripe_webhook.py): pending job -> Payment Link -> poller/webhook starts it
+  POST /stripe/webhook         Stripe -> complete_session (stripe_webhook.py)
+
+Report (the headline output; docs/specs/agent-report.md)
+  GET  /report/{job}.json      the one data model agent.md and the PDF both render from
+  GET  /report/{job}/agent.md  agent-facing fix doc
+  GET  /report/{job}.pdf       PDF, or the print-CSS HTML when the renderer is unavailable
+  GET  /report/{job}           human report (same JSON, rendered)
+  GET  /verdict/{job}          buyer-facing verdict, one block per lens
+
+Humans
+  GET|POST /rate/{job}         human rating page (Terac activity task_url / Linq link / room QR) and answer
+  POST /linq/webhook           Linq inbound text: raters enrol, panel replies, threaded intake (textflow.py)
+  GET  /raters                 opted-in rater count + whether Linq is live
+
+Batch and catalogue
+  POST /sweep (?sync=true)     judge a batch with no money attached; GET /sweep.json, GET /sweep (HTML)
+  GET  /skus                   SKU presets (skus.py)
+  GET  /summary                one call for the storefront: money, counts, learning, skus, pay links, recent jobs
+
+Before/after
+  POST /before_after/lock/{job}  lock the "before" verdict hash; GET /before_after/{b}/{a} compare
+
+Receipts and operator
+  GET  /ledger /events /jobs /learning   receipts, decision log, verdicts, arm gains + evaluator reputation
+  GET  /                       dashboard
+  POST /admin/humans/{job}     operator buys a panel for one job; /admin/sources/{job} re-attach sources
+  POST /admin/thread/{rater}/merge  merge a rater's open text-thread jobs
+  (all /admin/* require X-RC-Admin == RC_ENVELOPE_SECRET)
 
 Paid status is a receipt (Stripe session in the ledger), never a claim: protocol.admit() reads it;
 X-RC-Paid is honoured only when RC_DEV=1.
