@@ -30,11 +30,13 @@ MAX_TEXT_BYTES = 12_000
 MAX_README_BYTES = 20_000
 MAX_TREE_PATHS = 300
 MAX_DOC_FILES = 24
+MAX_DOC_CHARS = 600
 _GUARDRAIL_RE = re.compile(r"policy|envelope|budget|webhook|ledger|health|auth|guard|limit|approve|idempot|protocol", re.I)
 _CODE_EXT = (".py", ".ts", ".js", ".go", ".rs", ".rb", ".java", ".kt", ".swift", ".md")
+_SOURCE_EXT = tuple(e for e in _CODE_EXT if e != ".md")
 
 
-def _doc_head(text: str, limit: int = 240) -> str:
+def _doc_head(text: str, limit: int = MAX_DOC_CHARS) -> str:
     """First docstring / leading comment / first heading of a file, one line, capped."""
     s = text.lstrip()[:4000]
     m = re.match(r'(?:#![^\n]*\n)?(?:from __future__[^\n]*\n|\s)*(?:"""|\'\'\')(.*?)(?:"""|\'\'\')', s, re.S)
@@ -245,11 +247,15 @@ def read_repo(url: str, *, fetcher: probes.Fetcher | None = None, budget_s: floa
             meta["files"] = len(paths)
             if paths:
                 parts.append("--- files (top " + str(min(len(paths), MAX_TREE_PATHS)) + ") ---\n" + "\n".join(paths[:MAX_TREE_PATHS]))
-            # guardrail evidence: the first docstring/comment lines of files whose names say
+            # guardrail and sponsor evidence: the opening of the docstring/comment of files whose names say
             # policy/envelope/budget/webhook/ledger/health/auth (and every top-level module), so the
             # autonomy rubric sees a repo's real safeguards, not only the README's claims
+            # source files before .md: an alphabetical run of top-level docs otherwise spends the
+            # MAX_DOC_FILES budget before the integration modules (linq_client.py, terac_client.py),
+            # and their prose is already in the README the bundle carries whole
             picks = [p_ for p_ in paths if _GUARDRAIL_RE.search(p_) and p_.endswith(_CODE_EXT)]
-            picks += [p_ for p_ in paths if p_.count("/") <= 1 and p_.endswith(_CODE_EXT) and p_ not in picks]
+            for exts in (_SOURCE_EXT, _CODE_EXT):
+                picks += [p_ for p_ in paths if p_.count("/") <= 1 and p_.endswith(exts) and p_ not in picks]
             heads: list[str] = []
             for path in picks[:MAX_DOC_FILES]:
                 try:
