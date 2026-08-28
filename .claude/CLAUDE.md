@@ -1,5 +1,27 @@
 # Reality Check (zero-human): project instructions
 
+## compression — mandatory
+
+minimum text. zero meaningful loss.
+
+* delete anything removable.
+* merge anything redundant.
+* shorten anything compressible.
+* prefer structure over prose.
+* preserve all meaning that affects correctness, clarity, decisions, evidence, uncertainty, or action.
+* length follows information. never pad; never truncate for brevity.
+
+before emitting:
+
+1. perform a deletion pass.
+2. remove every word, sentence, bullet, section, preamble, recap, transition, or explanation whose removal does not materially reduce meaning.
+3. repeat until no further lossless deletion is possible.
+
+do not emit while removable text remains.
+
+verbosity is a defect.
+omission is also a defect.
+
 Judgment for agents. One paste or URL in, a full report out: lenses of evidence, a stamp, a route to
 money, an agent-facing fix doc. Thesis: we sell evidence-routing under uncertainty; the router decides
 which evidence (probe, model, crowd, expert) is worth paying for before money attaches to a claim.
