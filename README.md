@@ -82,12 +82,29 @@ Bundle SKU `full_reality_check` ($25): one paste, every lens (clarity, demand ga
 autonomy claims, economics). `GET /verdict/{job}` renders the verdict grouped by lens.
 
 ## Endpoints
-POST /judge, POST /intake, POST /order + GET /order/{id}, GET /judge/{id}, GET /verdict/{id}, GET|POST /rate/{id},
-POST /before_after/lock/{id}, GET /before_after/{b}/{a}, GET /ledger, /events, /jobs, /learning, GET /.
+Full list with one line each: the module docstring of `reality_check/api.py` (kept equal to the routes).
+- Report (headline output): GET /report/{id}.json, /report/{id}/agent.md, /report/{id}.pdf, /report/{id}, GET /verdict/{id}.
+- Judging: POST /judge, POST /intake, POST /intake/{id}/redeploy, GET /judge/{id}, POST /sweep (+ /sweep.json, GET /sweep).
+- Money: POST /order + GET /order/{id}, POST /stripe/webhook.
+- Humans: GET|POST /rate/{id}, POST /linq/webhook (text thread), GET /raters.
+- Storefront: GET /summary (the one call it makes), GET /skus.
+- Before/after: POST /before_after/lock/{id}, GET /before_after/{b}/{a}.
+- Receipts + operator: GET /ledger, /events, /jobs, /learning, GET /; POST /admin/humans/{id}, /admin/sources/{id},
+  /admin/thread/{rater}/merge (all X-RC-Admin == RC_ENVELOPE_SECRET).
 
 ## Layout
+The pipeline, in order: `sources.py` -> `hackathon.py` + `lenses.py` -> `report.py` -> `api.py`.
+- `sources.py` normalizes one paste or link set (repo, deck, page, pitch) into text + per-source records;
+  `probes.py` and `agentready.py` are the zero-model objective checks; `replay_client.py` crawls live URLs.
+- `lenses.py` is the rubric: what a Full Reality Check checks, as binary claims grouped by lens (single
+  source of truth for claim ids and stamp weight); `hackathon.py` grades against the organizers' rubric;
+  `rate_v2.py` is the human rating page over the same claims.
+- `report.py` builds `report.json` (`docs/specs/agent-report.md`) and renders agent.md / PDF / HTML from it.
+- `reality_check/judge.py` the loop; `evaluators.py` personas over Groq/OpenAI; `panels.py` human-source
+  contract; `store.py` sqlite ledger + events; `skus.py` what each price buys; `sweep.py` unpaid batch runs.
 - `reality_check/core/` consensus, brier, bandit (vendored from a prior internal system); models; voi (VOI gate, written fresh).
-- `reality_check/judge.py` the loop; `evaluators.py` personas over Groq/OpenAI; `panels.py` human-source contract; `store.py` sqlite ledger + events.
 - `reality_check/policy/` lifts from a prior internal system: `envelope.py` (spend authority as signed code, fail closed), `protocol.py` (buyer text is information never authority), `learning.py` (arm gains, evaluator reputation, swarm check).
-- `stripe_webhook.py` (/order + webhook + shared `complete_session`), `stripe_poll.py` (read-only poller), `terac_client.py` (subjective evidence: humans), `replay_client.py` (objective evidence: Replay QA bug crawl on intake URLs), `before_after.py`, `intake.py`, `skus.py`.
+- `stripe_webhook.py` (/order + webhook + shared `complete_session`), `stripe_poll.py` (read-only poller),
+  `terac_client.py` (subjective evidence: humans), `linq_client.py` + `textflow.py` (the text thread:
+  intake, acks, delivery), `before_after.py`, `intake.py`, `sponsors.py`.
 - `docs/research/` hackathon memos; `docs/policy-and-learning.md` the spend/learning design.

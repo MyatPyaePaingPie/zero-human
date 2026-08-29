@@ -361,3 +361,31 @@ def test_what_we_read_line_present():
     rep = report.build(jid)
     doc = report.to_html(rep)
     assert "What we read:" in doc
+
+
+def test_agent_md_model_evidence_cites_what_was_recorded():
+    # dogfood item 1, evidence half: hackathon findings carry no p, so the "What we saw" line
+    # must state the why / where / hints the rubric actually produced, never "p=None; why:".
+    jid = _make_job()
+    _settle(jid)
+    store.patch_job_state(jid, "hackathon", HACKATHON_FIXTURE)
+    md = report.to_agent_md(report.build(jid))
+    assert "p=None" not in md
+    assert "why: \n" not in md
+    assert "deck says texts customers, no linqapp in repo" in md  # sponsor/linq
+    assert "where: slide 1 headline" in md                        # msg/first-screen
+    assert "not used yet" in md                                   # sponsor/replay
+    # sponsor acceptance is "status = qualifies"; the finish line must not claim p >= 0.7
+    linq = md[md.index("<sub>sponsor/linq</sub>") - 400:md.index("<sub>sponsor/linq</sub>")]
+    assert "sponsor/linq reaches status = qualifies on re-run." in linq
+
+
+def test_finding_md_lists_hints_found_when_that_is_all_there_is():
+    line = report._finding_md({
+        "id": "sponsor/stripe", "section": "sponsors", "status": "partial", "owner": "human",
+        "claim": "Stripe", "evidence": {"kind": "model", "why": "", "hints_found": ["buy.stripe.com", "stripe_webhook.py"]},
+        "fix": "name the payment link on the pricing screen",
+        "acceptance": {"claim": "sponsor/stripe", "must": "status = qualifies"},
+    })
+    assert "hints found: buy.stripe.com, stripe_webhook.py" in line
+    assert "p=None" not in line

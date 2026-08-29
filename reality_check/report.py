@@ -117,7 +117,8 @@ def _hackathon_findings(hackathon: dict) -> list[dict]:
             "id": item.get("id", ""), "section": "sponsors",
             "status": item.get("status", "unknown"),
             "owner": "agent" if item in hackathon.get("sponsors", {}).get("cheapest_to_add", []) else "human",
-            "claim": item.get("name", ""), "evidence": {"kind": "model", "hints_found": item.get("hints_found", [])},
+            "claim": item.get("name", ""),
+            "evidence": {"kind": "model", "why": item.get("why", ""), "hints_found": item.get("hints_found", [])},
             "fix": item.get("fix", ""), "acceptance": {"claim": item.get("id", ""), "must": "status = qualifies"},
             "severity": "warn",
         })
@@ -320,7 +321,18 @@ def _finding_md(f: dict) -> str:
     elif ev.get("kind") == "human":
         observed = f"humans n={ev.get('n')} p={ev.get('p')}; minority: {ev.get('minority', '')}"
     elif ev.get("kind") == "model":
-        observed = f"models p={ev.get('p')}; why: {ev.get('why', ev.get('minority', ''))}"
+        # only business claims carry p; hackathon findings carry why / where / hints_found instead,
+        # so state what was actually recorded rather than a fixed "p=None; why:" shell
+        parts = []
+        if ev.get("p") is not None:
+            parts.append(f"models p={ev['p']}")
+        if ev.get("why") or ev.get("minority"):
+            parts.append(str(ev.get("why") or ev.get("minority")))
+        if ev.get("where"):
+            parts.append(f"where: {ev['where']}")
+        if ev.get("hints_found"):
+            parts.append("hints found: " + ", ".join(str(h) for h in ev["hints_found"]))
+        observed = "; ".join(parts) or "no evidence recorded"
     else:
         observed = str(ev)
     acc = f.get("acceptance", {})
@@ -328,10 +340,10 @@ def _finding_md(f: dict) -> str:
         done_when = f"{acc.get('probe')} is absent on the next run."
     elif "probe" in acc:
         done_when = "keeps passing on the next run."
-    elif acc.get("must") == "status = pass":
-        done_when = f"{acc.get('claim')} reaches status = pass on re-run."
+    elif acc.get("claim"):
+        done_when = f"{acc['claim']} reaches {acc.get('must') or 'p >= 0.7'} on re-run."
     else:
-        done_when = f"{acc.get('claim')} reaches p >= 0.7 on re-run." if acc else "re-run and check."
+        done_when = "re-run and check."
     # a person talking to a team: the action first, the evidence, the finish line; the id last and small
     status_word = {"pass": "holds", "fail": "missing", "partial": "half there", "unknown": "no evidence yet"}.get(f["status"], f["status"])
     return (f"### {f['fix']}\n"

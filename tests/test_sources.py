@@ -288,3 +288,30 @@ def test_read_repo_includes_tree_and_guardrail_docstrings():
     assert "app/policy/envelope.py" in src.text and "node_modules" not in src.text
     assert "Signed spend envelope" in src.text
     assert src.meta.get("files") == 2
+
+
+def test_doc_sample_reads_code_before_docs_and_past_the_first_line():
+    """Sponsor depth is graded off this sample: a run of top-level .md files must not spend the
+    MAX_DOC_FILES budget before the integration modules, and the endpoints/events a client names
+    further down its docstring have to survive the excerpt (linq depth stuck at 2, issue #24)."""
+    from reality_check import sources, probes
+    root = "https://api.github.com/repos/acme/rockets"
+    docs = [f"note-{i:02d}.md" for i in range(sources.MAX_DOC_FILES)]
+    tree = [{"path": p, "type": "blob"} for p in docs + ["linq_client.py"]]
+    client_doc = ('"""Linq: the delivery channel.\n\n' + "Padding that pushes the endpoints past the old 240-char cut. " * 4
+                  + '\nPOST /v3/messages and the message.received webhook.\n"""\n')
+    pages = {
+        root: (200, '{"name":"rockets","full_name":"acme/rockets","homepage":"","description":"x"}'),
+        root + "/readme": (200, "# Rockets"),
+        root + "/contents/": (200, "[]"),
+        root + "/git/trees/HEAD?recursive=1": (200, json.dumps({"tree": tree})),
+        root + "/contents/linq_client.py": (200, client_doc),
+    }
+    pages.update({root + "/contents/" + p: (200, f"# {p}\nprose") for p in docs})
+
+    def fetcher(url, timeout):
+        st, body = pages.get(url, (404, "nope"))
+        return probes.FetchResult(status=st, headers={"content-type": "application/json"}, text=body, url=url, elapsed_ms=1)
+
+    src = sources.read_repo("https://github.com/acme/rockets", fetcher=fetcher, resolver=lambda h: ["140.82.112.3"])
+    assert "/v3/messages" in src.text and "message.received" in src.text

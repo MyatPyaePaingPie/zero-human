@@ -68,6 +68,13 @@ _HACKATHON_STAMP_LABELS = {
 }
 
 
+def _clean_url(raw: str) -> str:
+    """People end a link with the sentence: "repo is https://github.com/a/b, and the page is ...".
+    Trim that trailing punctuation so the comma is not sent to the access check as part of the
+    repo name. Brackets and quotes are already outside ``_URL_RE``."""
+    return raw.rstrip(".,;:!?")
+
+
 def parse_links(text: str) -> dict[str, Any]:
     """Split a text message into repo/deck/url links (via ``sources.detect``) plus whatever
     text is left over (the pitch). Any subset of link kinds may be present; only the first URL
@@ -76,11 +83,11 @@ def parse_links(text: str) -> dict[str, Any]:
     out: dict[str, str | None] = {"repo": None, "deck": None, "url": None}
     remainder = text
     for m in _URL_RE.finditer(text):
-        link = m.group(0)
+        link = _clean_url(m.group(0))
         kind = sources.detect(link)
         if kind in ("repo", "deck", "page") and not out[{"page": "url"}.get(kind, kind)]:
             out[{"page": "url"}.get(kind, kind)] = link
-        remainder = remainder.replace(link, " ")
+        remainder = remainder.replace(m.group(0), " ")
     return {**out, "pitch": " ".join(remainder.split())}
 
 
@@ -253,7 +260,7 @@ def _open_job(phone_hash: str) -> dict | None:
 def _checked_sources(text: str) -> list[dict]:
     checked = []
     for match in _URL_RE.finditer(text or ""):
-        url = match.group(0)
+        url = _clean_url(match.group(0))
         kind = sources.detect(url)
         if kind not in ("repo", "deck", "page"):
             kind = "page"
